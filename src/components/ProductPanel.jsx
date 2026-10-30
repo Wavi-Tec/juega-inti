@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Image from 'next/image';
 import ArtCanvas from './ArtCanvas';
 import { CloseIcon } from './icons';
 import { drawBottle } from '@/game/art';
@@ -32,8 +33,12 @@ export default function ProductPanel({ onClose }) {
         <div className="sheet-handle" aria-hidden="true" />
         <header className="sheet-head">
           {PRODUCTO.imagenFrasco ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img className="sheet-bottle" src={PRODUCTO.imagenFrasco} alt={`Frasco de ${PRODUCTO.nombre}`} />
+            <Image
+              className="sheet-bottle is-photo"
+              src={PRODUCTO.imagenFrasco}
+              alt={`Frasco y caja de ${PRODUCTO.nombre}`}
+              sizes="30vw"
+            />
           ) : (
             <ArtCanvas
               className="sheet-bottle"
@@ -47,6 +52,10 @@ export default function ProductPanel({ onClose }) {
             <p className="kicker">Conoce el producto</p>
             <h2 id="producto-titulo">{PRODUCTO.nombre}</h2>
             <p className="sheet-sub">{PRODUCTO.bajada}</p>
+            <p className="distribuido">
+              Distribuido por
+              <Image className="inti-logo" src={PRODUCTO.logoDistribuidor} alt={PRODUCTO.distribuidor} sizes="80px" />
+            </p>
           </div>
           <button ref={closeRef} className="icon-btn sheet-close" onClick={onClose} aria-label="Cerrar">
             <CloseIcon />

@@ -8,6 +8,9 @@
 // Regla de redacción: las afirmaciones sobre el producto siempre se atribuyen a su ficha o
 // prospecto. No escribir que cura, elimina virus ni garantiza prevenir infecciones.
 
+import fotoProducto from '@/assets/marca/echinacea-medica.png';
+import logoInti from '@/assets/marca/inti-logo.webp';
+
 export const MENSAJES_CLIMA = [
   {
     icono: '☁️',
@@ -33,10 +36,12 @@ export const AVISO_FANTASIA =
 
 export const PRODUCTO = {
   nombre: 'Echinacea Médica',
-  // Ruta a una foto real del frasco dentro de /public (por ejemplo '/frasco.png').
-  // Con null se muestra la ilustración del frasco.
-  imagenFrasco: null,
-  bajada: 'A base de equinácea (Echinacea)',
+  // Foto real del frasco y la caja (fondo transparente). Para cambiarla, reemplaza el archivo
+  // en src/assets/marca/. Con null se muestra la ilustración del frasco.
+  imagenFrasco: fotoProducto,
+  distribuidor: 'INTI',
+  logoDistribuidor: logoInti,
+  bajada: 'Extracto de Echinacea purpurea',
   secciones: [
     {
       titulo: 'Lo que dice su ficha',

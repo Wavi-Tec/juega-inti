@@ -1052,10 +1052,30 @@ export function drawBottle(ctx, x, y, s, font) {
   ctx.restore();
 }
 
+// ── Imágenes para el lienzo ────────────────────────────────────────────────
+
+const imageCache = new Map();
+
+/** Carga (una sola vez) una imagen para dibujarla en canvas; devuelve null hasta que esté lista. */
+export function loadImage(src) {
+  if (!src || typeof Image === 'undefined') return null;
+  let img = imageCache.get(src);
+  if (!img) {
+    img = new Image();
+    img.decoding = 'async';
+    img.src = src;
+    imageCache.set(src, img);
+  }
+  return img.complete && img.naturalWidth ? img : null;
+}
+
 // ── Escena final: Echi, la persona y el frasco ─────────────────────────────
 
-/** Composición pensada para un lienzo lógico de 340 × 230. */
-export function drawFinale(ctx, w, h, t, font) {
+/**
+ * Composición pensada para un lienzo lógico de 340 × 210.
+ * `productSrc`: URL de la foto real del producto; sin ella se dibuja el frasco ilustrado.
+ */
+export function drawFinale(ctx, w, h, t, font, productSrc = null) {
   const sky = ctx.createLinearGradient(0, 0, 0, h);
   sky.addColorStop(0, '#9ED8F5');
   sky.addColorStop(1, '#F2FAF4');
@@ -1089,7 +1109,7 @@ export function drawFinale(ctx, w, h, t, font) {
 
   const ground = h - 12;
   drawPerson(ctx, {
-    x: w * 0.24,
+    x: productSrc ? w * 0.19 : w * 0.24,
     y: ground,
     t,
     walk: 0,
@@ -1100,7 +1120,7 @@ export function drawFinale(ctx, w, h, t, font) {
     wave: 1,
   });
   drawEchi(ctx, {
-    x: w * 0.78,
+    x: productSrc ? w * 0.83 : w * 0.78,
     y: ground,
     t,
     hop: Math.abs(Math.sin(t * 3)) * 6,
@@ -1110,7 +1130,22 @@ export function drawFinale(ctx, w, h, t, font) {
     wave: 1,
     arms: 0.2,
   });
-  drawBottle(ctx, w * 0.5, ground + 2 - Math.sin(t * 2) * 2, 0.78, font);
+  if (productSrc) {
+    const img = loadImage(productSrc);
+    if (img) {
+      const ph = 168;
+      const pw = (ph * img.naturalWidth) / img.naturalHeight;
+      const bob = Math.sin(t * 2) * 2;
+      ctx.fillStyle = 'rgba(30, 50, 30, 0.2)';
+      ctx.beginPath();
+      ctx.ellipse(w / 2, ground + 3, pw * 0.48, 7, 0, 0, TAU);
+      ctx.fill();
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, w / 2 - pw / 2, ground + 4 - ph - bob, pw, ph);
+    }
+  } else {
+    drawBottle(ctx, w * 0.5, ground + 2 - Math.sin(t * 2) * 2, 0.78, font);
+  }
 
   // Pétalos que caen
   for (let i = 0; i < 9; i++) {

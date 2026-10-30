@@ -78,6 +78,13 @@ function hash(n) {
 }
 
 const MAX_PARTICLES = 420;
+// Cantidades para una columna (W); en pantallas anchas se usan más, hasta estos máximos.
+const BASE_CLOUDS = 7;
+const BASE_RAIN = 170;
+const BASE_SNOW = 150;
+const MAX_CLOUDS = 24;
+const MAX_RAIN = 560;
+const MAX_SNOW = 500;
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 export class Scene {
@@ -89,6 +96,7 @@ export class Scene {
     this.W = W;
     this.H = 960;
     this.dpr = 1;
+    this.quality = 1;
     this.cssScale = 1;
 
     this.t = 0;
@@ -99,17 +107,29 @@ export class Scene {
     this.P = {};
     this.mixPalette();
 
-    this.clouds = Array.from({ length: 7 }, (_, i) => ({
+    // Extensión visible del mundo en unidades lógicas. La columna de juego va de 0 a W;
+    // en pantallas anchas el mundo (cielo, jardín, clima) sigue a ambos lados.
+    this.left = 0;
+    this.right = W;
+    this.originX = 0;
+    this.originY = 0;
+
+    this.clouds = Array.from({ length: MAX_CLOUDS }, (_, i) => ({
       x: hash(i) * 640 - 50,
       y: 70 + hash(i + 10) * 330,
       s: 0.7 + hash(i + 20) * 0.7,
       v: 6 + hash(i + 30) * 10,
     }));
-    this.rain = Array.from({ length: 170 }, () => this.newDrop(true));
-    this.snow = Array.from({ length: 150 }, () => this.newFlake(true));
+    this.rain = Array.from({ length: MAX_RAIN }, () => this.newDrop(true));
+    this.snow = Array.from({ length: MAX_SNOW }, () => this.newFlake(true));
 
     this.reset();
     this.resize(W, 960, 1);
+  }
+
+  // Cuánto más ancho que la columna es lo visible (1 en un celular vertical).
+  get span() {
+    return (this.right - this.left) / W;
   }
 
   reset() {
@@ -130,10 +150,21 @@ export class Scene {
     this.person = { expr: null, exprT: 0, blinkT: 3.4, blink: 0 };
   }
 
-  resize(cssW, cssH, dpr = 1) {
-    this.dpr = Math.min(dpr || 1, 2.5);
-    this.cssScale = cssW / W;
-    this.H = Math.max(900, cssH / this.cssScale);
+  /**
+   * cssW × cssH: tamaño del lienzo en px CSS (toda la ventana).
+   * column: rectángulo de la columna de juego relativo al lienzo, en px CSS. Por defecto, el lienzo entero.
+   */
+  resize(cssW, cssH, dpr = 1, column = { left: 0, top: 0, width: cssW, height: cssH }) {
+    // En pantallas muy grandes se limita la resolución interna (~4,5 MP) y `quality` la baja
+    // más si el equipo no logra mantener la fluidez (ver EchiGame).
+    const maxDpr = Math.sqrt(4.5e6 / Math.max(1, cssW * cssH));
+    this.dpr = Math.max(0.5, Math.min(dpr || 1, 2.5, maxDpr) * this.quality);
+    this.cssScale = column.width / W;
+    this.originX = column.left;
+    this.originY = column.top;
+    this.H = Math.max(900, column.height / this.cssScale);
+    this.left = -column.left / this.cssScale;
+    this.right = (cssW - column.left) / this.cssScale;
     this.canvas.width = Math.round(cssW * this.dpr);
     this.canvas.height = Math.round(cssH * this.dpr);
     const extra = Math.max(0, this.H - 960);
@@ -142,10 +173,20 @@ export class Scene {
     this.echiPos = { x: 350, y: this.groundY + 2 };
     this.center = { x: 282, y: this.groundY - 108 };
     this.vignette = null;
+    // Nubes, lluvia y nieve repartidas por todo el ancho visible.
+    const span = this.right - this.left;
+    this.clouds.forEach((c, i) => {
+      c.x = this.left - 60 + hash(i) * (span + 120);
+    });
+    for (const d of this.rain) d.x = this.left + Math.random() * (span + 160);
+    for (const f of this.snow) f.x = this.left + Math.random() * (span + 40);
   }
 
   toLogical(clientX, clientY, rect) {
-    return { x: (clientX - rect.left) / this.cssScale, y: (clientY - rect.top) / this.cssScale };
+    return {
+      x: (clientX - rect.left - this.originX) / this.cssScale,
+      y: (clientY - rect.top - this.originY) / this.cssScale,
+    };
   }
 
   // Echi crece un poco con la racha.
@@ -339,10 +380,11 @@ export class Scene {
     this.addText('¡Lo lograste!', W / 2, this.center.y - SHIELD.radius - 90, '#FFFFFF', 46, COLORS.pinkDark, 1.8);
   }
 
-  petalShower(n) {
+  petalShower(base) {
+    const n = Math.round(base * Math.min(this.span, 2.5));
     for (let i = 0; i < n; i++) {
       this.addParticle({
-        type: 'petal', x: Math.random() * W, y: -20 - Math.random() * 200,
+        type: 'petal', x: this.left + Math.random() * (this.right - this.left), y: -20 - Math.random() * 200,
         vx: (Math.random() - 0.5) * 60, vy: 120 + Math.random() * 120,
         rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 6, size: 10 + Math.random() * 8,
         color: [COLORS.pink, COLORS.pinkLight, COLORS.pinkPale][i % 3], life: 3, max: 3, g: 30,
@@ -353,10 +395,10 @@ export class Scene {
   leafGust() {
     for (let i = 0; i < 14; i++) {
       this.addParticle({
-        type: 'petal', x: W + 20 + Math.random() * 80, y: 200 + Math.random() * (this.groundY - 260),
+        type: 'petal', x: this.right + 20 + Math.random() * 80, y: 200 + Math.random() * (this.groundY - 260),
         vx: -260 - Math.random() * 160, vy: (Math.random() - 0.5) * 60,
         rot: Math.random() * TAU, vr: 7, size: 12, color: i % 2 ? COLORS.greenLight : COLORS.pinkLight,
-        life: 2.4, max: 2.4, g: 20,
+        life: 2.4 * Math.max(1, this.span * 0.8), max: 2.4 * Math.max(1, this.span * 0.8), g: 20,
       });
     }
   }
@@ -406,7 +448,7 @@ export class Scene {
 
   newDrop(initial) {
     return {
-      x: Math.random() * (W + 160),
+      x: this.left + Math.random() * (this.right - this.left + 160),
       y: initial ? Math.random() * 1000 : -30 - Math.random() * 120,
       len: 18 + Math.random() * 12,
       v: 850 + Math.random() * 250,
@@ -415,12 +457,17 @@ export class Scene {
 
   newFlake(initial) {
     return {
-      x: Math.random() * W,
+      x: this.left + Math.random() * (this.right - this.left + 40),
       y: initial ? Math.random() * 1000 : -10 - Math.random() * 60,
       r: 1.8 + Math.random() * 3,
       v: 45 + Math.random() * 70,
       p: Math.random() * TAU,
     };
+  }
+
+  // Lluvia y nieve con la misma densidad en cualquier ancho de pantalla.
+  weatherCount(list, base, weight) {
+    return Math.min(list.length, Math.round(base * this.span * weight));
   }
 
   update(dt, game, mode) {
@@ -438,30 +485,30 @@ export class Scene {
 
     for (const c of this.clouds) {
       c.x -= (c.v + 8 * this.walking) * dt;
-      if (c.x < -170) {
-        c.x = W + 170;
+      if (c.x < this.left - 170) {
+        c.x = this.right + 170;
         c.y = 70 + Math.random() * 330;
       }
     }
 
-    const rainCount = Math.round(this.rain.length * this.weights[2]);
+    const rainCount = this.weatherCount(this.rain, BASE_RAIN, this.weights[2]);
     for (let i = 0; i < rainCount; i++) {
       const d = this.rain[i];
       d.y += d.v * dt;
       d.x -= d.v * 0.22 * dt;
       if (d.y > this.groundY + 30 + (i % 7) * 12) {
-        if (i % 4 === 0 && d.x > 0 && d.x < W) {
+        if (i % 4 === 0 && d.x > this.left && d.x < this.right) {
           this.addParticle({ type: 'splash', x: d.x, y: d.y, life: 0.25, max: 0.25, vx: 0, vy: 0, g: 0 });
         }
         Object.assign(d, this.newDrop(false));
       }
     }
-    const snowCount = Math.round(this.snow.length * this.weights[3]);
+    const snowCount = this.weatherCount(this.snow, BASE_SNOW, this.weights[3]);
     for (let i = 0; i < snowCount; i++) {
       const f = this.snow[i];
       f.y += f.v * dt;
       f.x += (Math.sin(this.t * 1.4 + f.p) * 22 - 12) * dt;
-      if (f.y > this.H + 10 || f.x < -20) Object.assign(f, this.newFlake(false));
+      if (f.y > this.H + 10 || f.x < this.left - 20) Object.assign(f, this.newFlake(false));
     }
 
     // Escudo
@@ -492,9 +539,9 @@ export class Scene {
     // Ráfaga final: chispas doradas que suben desde el suelo.
     if (this.rushT >= 0 && mode === 'partida') {
       this.rushT += dt;
-      if (Math.random() < dt * 14) {
+      if (Math.random() < dt * 14 * Math.min(this.span, 2.5)) {
         this.addParticle({
-          type: 'spark', x: Math.random() * W, y: this.H - 40,
+          type: 'spark', x: this.left + Math.random() * (this.right - this.left), y: this.H - 40,
           vx: (Math.random() - 0.5) * 30, vy: -160 - Math.random() * 120,
           rot: Math.random() * TAU, vr: 4, size: 5 + Math.random() * 5,
           color: COLORS.gold, life: 1.6, max: 1.6, g: 0,
@@ -605,7 +652,10 @@ export class Scene {
   render(game, mode, { hint = false } = {}) {
     const ctx = this.ctx;
     const s = this.dpr * this.cssScale;
-    ctx.setTransform(s, 0, 0, s, 0, 0);
+    // El origen lógico (0, 0) es la esquina de la columna de juego dentro del lienzo.
+    ctx.setTransform(s, 0, 0, s, this.originX * this.dpr, this.originY * this.dpr);
+    const vx = this.left;
+    const vw = this.right - this.left;
 
     let sx = 0;
     let sy = 0;
@@ -642,35 +692,44 @@ export class Scene {
       const a = Math.min(1, this.rushT * 2) * (0.45 + 0.25 * Math.sin(this.t * 9));
       ctx.strokeStyle = `rgba(255, 210, 63, ${a})`;
       ctx.lineWidth = 14;
-      ctx.strokeRect(0, 0, W, this.H);
+      ctx.strokeRect(vx, 0, vw, this.H);
     }
 
     if (this.flash.a > 0.01) {
       ctx.fillStyle = `rgba(${this.flash.color},${this.flash.a * (this.reducedMotion ? 0.4 : 1)})`;
-      ctx.fillRect(0, 0, W, this.H);
+      ctx.fillRect(vx, 0, vw, this.H);
     }
     if (!this.vignette) {
-      const v = ctx.createRadialGradient(W / 2, this.H * 0.45, this.H * 0.3, W / 2, this.H * 0.45, this.H * 0.78);
+      const cx = vx + vw / 2;
+      const outer = Math.max(this.H * 0.78, vw * 0.62);
+      const v = ctx.createRadialGradient(cx, this.H * 0.45, outer * 0.4, cx, this.H * 0.45, outer);
       v.addColorStop(0, 'rgba(20, 30, 50, 0)');
       v.addColorStop(1, 'rgba(20, 30, 50, 0.28)');
       this.vignette = v;
     }
     ctx.globalAlpha = 0.5 + this.weights[2] * 0.6;
     ctx.fillStyle = this.vignette;
-    ctx.fillRect(0, 0, W, this.H);
+    ctx.fillRect(vx, 0, vw, this.H);
     ctx.globalAlpha = 1;
+  }
+
+  // Índices de elementos repetidos cada `spacing` (con desplazamiento `off`) que caen en lo visible.
+  visibleRange(spacing, off, margin) {
+    return [Math.floor((this.left - margin + off) / spacing) - 1, Math.ceil((this.right + margin + off) / spacing) + 1];
   }
 
   drawBackground(ctx) {
     const P = this.P;
     const gy = this.groundY;
     const [wSun, wCloud, wRain, wSnow] = this.weights;
+    const fx = this.left - 30; // franja horizontal que cubre todo lo visible (con margen por el temblor)
+    const fw = this.right - this.left + 60;
 
     const sky = ctx.createLinearGradient(0, 0, 0, gy);
     sky.addColorStop(0, P.skyTop);
     sky.addColorStop(1, P.skyBottom);
     ctx.fillStyle = sky;
-    ctx.fillRect(-30, -30, W + 60, gy + 60);
+    ctx.fillRect(fx, -30, fw, gy + 60);
 
     const sunA = wSun + wCloud * 0.1 + wSnow * 0.3;
     if (sunA > 0.02) {
@@ -703,7 +762,11 @@ export class Scene {
 
     const cloudAlpha = 0.75 + (wCloud + wRain) * 0.25;
     ctx.globalAlpha = cloudAlpha;
-    for (const c of this.clouds) this.drawCloud(ctx, c.x, c.y, c.s * (1 + wRain * 0.35));
+    const clouds = Math.min(this.clouds.length, Math.round(BASE_CLOUDS * this.span));
+    for (let i = 0; i < clouds; i++) {
+      const c = this.clouds[i];
+      this.drawCloud(ctx, c.x, c.y, c.s * (1 + wRain * 0.35));
+    }
     ctx.globalAlpha = 1;
 
     this.drawHills(ctx, gy - 80, 46, 0.006, 0.013, this.walkX * 0.1, P.hillFar);
@@ -713,20 +776,21 @@ export class Scene {
 
     if (wRain > 0.01) {
       ctx.fillStyle = `rgba(40, 60, 95, ${0.16 * wRain})`;
-      ctx.fillRect(-30, -30, W + 60, gy + 30);
+      ctx.fillRect(fx, -30, fw, gy + 30);
     }
 
     // Suelo y sendero
     ctx.fillStyle = P.ground;
-    ctx.fillRect(-30, gy - 10, W + 60, this.H - gy + 50);
+    ctx.fillRect(fx, gy - 10, fw, this.H - gy + 50);
     ctx.fillStyle = P.path;
-    ctx.fillRect(-30, gy - 6, W + 60, 46);
+    ctx.fillRect(fx, gy - 6, fw, 46);
     ctx.fillStyle = P.pathEdge;
-    ctx.fillRect(-30, gy - 8, W + 60, 3);
-    ctx.fillRect(-30, gy + 38, W + 60, 4);
+    ctx.fillRect(fx, gy - 8, fw, 3);
+    ctx.fillRect(fx, gy + 38, fw, 4);
 
     const stoneOff = this.walkX % 70;
-    for (let i = -1; i < 10; i++) {
+    const [s0, s1] = this.visibleRange(70, 0, 30);
+    for (let i = s0; i <= s1; i++) {
       const k = Math.floor(this.walkX / 70) + i;
       const x = i * 70 - stoneOff + 20 * hash(k);
       ctx.beginPath();
@@ -736,7 +800,8 @@ export class Scene {
 
     if (wRain > 0.02) {
       const off = this.walkX % 260;
-      for (let i = -1; i < 4; i++) {
+      const [p0, p1] = this.visibleRange(260, 0, 140);
+      for (let i = p0; i <= p1; i++) {
         const x = i * 260 - off + 90;
         ctx.fillStyle = `rgba(150, 185, 220, ${0.65 * wRain})`;
         ctx.beginPath();
@@ -754,7 +819,8 @@ export class Scene {
     // Matas de pasto entre el sendero y los controles
     ctx.fillStyle = P.groundDark;
     const tuftOff = this.walkX % 48;
-    for (let i = -1; i < 13; i++) {
+    const [t0, t1] = this.visibleRange(48, 0, 20);
+    for (let i = t0; i <= t1; i++) {
       const k = Math.floor(this.walkX / 48) + i;
       const x = i * 48 - tuftOff;
       const y = gy + 58 + 30 * hash(k + 2);
@@ -769,7 +835,8 @@ export class Scene {
     if (wSnow > 0.02) {
       ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * wSnow})`;
       ctx.beginPath();
-      for (let i = -1; i < 12; i++) {
+      const [m0, m1] = this.visibleRange(52, 0, 40);
+      for (let i = m0; i <= m1; i++) {
         const x = i * 52 - (this.walkX % 52);
         ctx.moveTo(x + 30, gy - 8);
         ctx.ellipse(x, gy - 8, 30, 6, 0, 0, TAU);
@@ -805,66 +872,89 @@ export class Scene {
   drawHills(ctx, base, amp, f1, f2, off, color) {
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(-30, this.H);
-    for (let x = -30; x <= W + 30; x += 15) {
+    const x0 = Math.floor((this.left - 30) / 15) * 15;
+    const x1 = this.right + 30;
+    ctx.moveTo(x0, this.H);
+    for (let x = x0; x <= x1 + 15; x += 15) {
       const wx = x + off;
       ctx.lineTo(x, base - amp * (0.6 * Math.sin(wx * f1 + 1.3) + 0.4 * Math.sin(wx * f2 + 0.4)));
     }
-    ctx.lineTo(W + 30, this.H);
+    ctx.lineTo(x1 + 15, this.H);
     ctx.closePath();
     ctx.fill();
   }
 
+  // Árboles y jardín se dibujan por lotes (un solo trazo por color) para que el mundo ancho
+  // de las pantallas grandes no multiplique las operaciones de dibujo.
   drawTrees(ctx, base, wSnow) {
     const spacing = 150;
     const off = this.walkX * 0.4;
-    const k0 = Math.floor(off / spacing) - 1;
-    for (let k = k0; k < k0 + 6; k++) {
+    const [k0, k1] = this.visibleRange(spacing, off, 170);
+    const round = [];
+    const pines = [];
+    ctx.fillStyle = '#7A5638';
+    for (let k = k0; k <= k1; k++) {
       const x = k * spacing - off + 80 * hash(k);
-      if (x < -90 || x > W + 90) continue;
+      if (x < this.left - 90 || x > this.right + 90) continue;
       const s = 0.75 + 0.5 * hash(k + 3);
-      ctx.fillStyle = '#7A5638';
       ctx.fillRect(x - 5 * s, base - 42 * s, 10 * s, 44 * s);
-      if (hash(k + 7) > 0.45) {
-        ctx.fillStyle = this.P.treeDark;
+      (hash(k + 7) > 0.45 ? round : pines).push([x, s]);
+    }
+    const snow = wSnow > 0.02 ? `rgba(255, 255, 255, ${0.95 * wSnow})` : null;
+
+    ctx.fillStyle = this.P.treeDark;
+    ctx.beginPath();
+    for (const [x, s] of round) {
+      ctx.moveTo(x + 36 * s, base - 52 * s);
+      ctx.arc(x + 6 * s, base - 52 * s, 30 * s, 0, TAU);
+    }
+    ctx.fill();
+    ctx.fillStyle = this.P.tree;
+    ctx.beginPath();
+    for (const [x, s] of round) {
+      ctx.moveTo(x + 30 * s, base - 64 * s);
+      ctx.arc(x, base - 64 * s, 30 * s, 0, TAU);
+      ctx.moveTo(x + 2 * s, base - 48 * s);
+      ctx.arc(x - 20 * s, base - 48 * s, 22 * s, 0, TAU);
+      ctx.moveTo(x + 44 * s, base - 50 * s);
+      ctx.arc(x + 22 * s, base - 50 * s, 22 * s, 0, TAU);
+    }
+    ctx.fill();
+    if (snow) {
+      ctx.fillStyle = snow;
+      ctx.beginPath();
+      for (const [x, s] of round) {
+        ctx.moveTo(x + 24 * s, base - 86 * s);
+        ctx.ellipse(x, base - 86 * s, 24 * s, 10 * s, 0, 0, TAU);
+      }
+      ctx.fill();
+    }
+
+    // Pinos: tres pisos, de abajo hacia arriba, cada uno con su nieve antes del siguiente.
+    for (let j = 0; j < 3; j++) {
+      ctx.fillStyle = j % 2 ? this.P.tree : this.P.treeDark;
+      ctx.beginPath();
+      for (const [x, s] of pines) {
+        const ty = base - 30 * s - j * 26 * s;
+        const tw = (40 - j * 9) * s;
+        ctx.moveTo(x - tw, ty);
+        ctx.lineTo(x, ty - 44 * s);
+        ctx.lineTo(x + tw, ty);
+        ctx.closePath();
+      }
+      ctx.fill();
+      if (snow) {
+        ctx.fillStyle = snow;
         ctx.beginPath();
-        ctx.arc(x + 6 * s, base - 52 * s, 30 * s, 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = this.P.tree;
-        ctx.beginPath();
-        ctx.arc(x, base - 64 * s, 30 * s, 0, TAU);
-        ctx.moveTo(x - 20 * s, base - 48 * s);
-        ctx.arc(x - 20 * s, base - 48 * s, 22 * s, 0, TAU);
-        ctx.moveTo(x + 22 * s, base - 50 * s);
-        ctx.arc(x + 22 * s, base - 50 * s, 22 * s, 0, TAU);
-        ctx.fill();
-        if (wSnow > 0.02) {
-          ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * wSnow})`;
-          ctx.beginPath();
-          ctx.ellipse(x, base - 86 * s, 24 * s, 10 * s, 0, 0, TAU);
-          ctx.fill();
-        }
-      } else {
-        for (let j = 0; j < 3; j++) {
+        for (const [x, s] of pines) {
           const ty = base - 30 * s - j * 26 * s;
           const tw = (40 - j * 9) * s;
-          ctx.fillStyle = j % 2 ? this.P.tree : this.P.treeDark;
-          ctx.beginPath();
-          ctx.moveTo(x - tw, ty);
+          ctx.moveTo(x - tw * 0.35, ty - 28 * s);
           ctx.lineTo(x, ty - 44 * s);
-          ctx.lineTo(x + tw, ty);
+          ctx.lineTo(x + tw * 0.35, ty - 28 * s);
           ctx.closePath();
-          ctx.fill();
-          if (wSnow > 0.02) {
-            ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * wSnow})`;
-            ctx.beginPath();
-            ctx.moveTo(x - tw * 0.35, ty - 28 * s);
-            ctx.lineTo(x, ty - 44 * s);
-            ctx.lineTo(x + tw * 0.35, ty - 28 * s);
-            ctx.closePath();
-            ctx.fill();
-          }
         }
+        ctx.fill();
       }
     }
   }
@@ -872,55 +962,73 @@ export class Scene {
   drawGarden(ctx, base, wSnow) {
     const spacing = 96;
     const off = this.walkX * 0.75;
-    const k0 = Math.floor(off / spacing) - 1;
-    for (let k = k0; k < k0 + 8; k++) {
+    const [k0, k1] = this.visibleRange(spacing, off, 100);
+    const bushes = [];
+    const flowers = [];
+    for (let k = k0; k <= k1; k++) {
       const x = k * spacing - off + 30 * hash(k + 11);
-      if (x < -60 || x > W + 60) continue;
-      if (hash(k + 13) > 0.35) {
-        const r = 16 + 10 * hash(k + 17);
-        ctx.fillStyle = this.P.bush;
-        ctx.beginPath();
-        ctx.arc(x, base - r * 0.6, r, Math.PI, 0);
-        ctx.arc(x + r * 0.9, base - r * 0.35, r * 0.75, Math.PI, 0);
-        ctx.arc(x - r * 0.9, base - r * 0.35, r * 0.7, Math.PI, 0);
-        ctx.fill();
-        if (wSnow > 0.02) {
-          ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * wSnow})`;
-          ctx.beginPath();
-          ctx.ellipse(x, base - r * 1.45, r * 0.75, r * 0.28, 0, 0, TAU);
-          ctx.fill();
-        }
-      }
+      if (x < this.left - 60 || x > this.right + 60) continue;
+      if (hash(k + 13) > 0.35) bushes.push([x, 16 + 10 * hash(k + 17)]);
       // Pequeñas equináceas del jardín
-      const flowers = 1 + Math.floor(hash(k + 19) * 3);
-      for (let f = 0; f < flowers; f++) {
+      const n = 1 + Math.floor(hash(k + 19) * 3);
+      for (let f = 0; f < n; f++) {
         const fx = x + 18 + f * 13;
         const fh = 26 + 18 * hash(k * 3 + f);
-        const swayX = Math.sin(this.t * 1.8 + k + f) * 2;
-        ctx.strokeStyle = this.P.grassDark;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(fx, base);
-        ctx.quadraticCurveTo(fx, base - fh * 0.6, fx + swayX, base - fh);
-        ctx.stroke();
-        ctx.save();
-        ctx.translate(fx + swayX, base - fh);
-        ctx.fillStyle = COLORS.pink;
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * TAU;
-          ctx.save();
-          ctx.rotate(a + Math.PI / 2);
-          petalPathSmall(ctx);
-          ctx.fill();
-          ctx.restore();
-        }
-        ctx.fillStyle = COLORS.coneDark;
-        ctx.beginPath();
-        ctx.arc(0, -1, 4.2, 0, TAU);
-        ctx.fill();
-        ctx.restore();
+        flowers.push([fx, fh, Math.sin(this.t * 1.8 + k + f) * 2]);
       }
     }
+
+    ctx.fillStyle = this.P.bush;
+    ctx.beginPath();
+    for (const [x, r] of bushes) {
+      ctx.moveTo(x - r, base - r * 0.6);
+      ctx.arc(x, base - r * 0.6, r, Math.PI, 0);
+      ctx.arc(x + r * 0.9, base - r * 0.35, r * 0.75, Math.PI, 0);
+      ctx.arc(x - r * 0.9, base - r * 0.35, r * 0.7, Math.PI, 0);
+      ctx.closePath();
+    }
+    ctx.fill();
+    if (wSnow > 0.02) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * wSnow})`;
+      ctx.beginPath();
+      for (const [x, r] of bushes) {
+        ctx.moveTo(x + r * 0.75, base - r * 1.45);
+        ctx.ellipse(x, base - r * 1.45, r * 0.75, r * 0.28, 0, 0, TAU);
+      }
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = this.P.grassDark;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (const [fx, fh, sway] of flowers) {
+      ctx.moveTo(fx, base);
+      ctx.quadraticCurveTo(fx, base - fh * 0.6, fx + sway, base - fh);
+    }
+    ctx.stroke();
+
+    // Pétalos pequeños (punta en (0,-11)), girados a mano para juntar todo en un solo trazo.
+    ctx.fillStyle = COLORS.pink;
+    ctx.beginPath();
+    for (const [fx, fh, sway] of flowers) {
+      const cx = fx + sway;
+      const cy = base - fh;
+      for (let i = 0; i < 8; i++) {
+        const [c, s] = PETAL_DIRS[i];
+        // Puntos (4,-5), (0,-11) y (-4,-5) del pétalo, girados.
+        ctx.moveTo(cx, cy);
+        ctx.quadraticCurveTo(cx + 4 * c + 5 * s, cy + 4 * s - 5 * c, cx + 11 * s, cy - 11 * c);
+        ctx.quadraticCurveTo(cx - 4 * c + 5 * s, cy - 4 * s - 5 * c, cx, cy);
+      }
+    }
+    ctx.fill();
+    ctx.fillStyle = COLORS.coneDark;
+    ctx.beginPath();
+    for (const [fx, fh, sway] of flowers) {
+      ctx.moveTo(fx + sway + 4.2, base - fh - 1);
+      ctx.arc(fx + sway, base - fh - 1, 4.2, 0, TAU);
+    }
+    ctx.fill();
   }
 
   drawShieldBack(ctx, game, mode) {
@@ -1224,7 +1332,8 @@ export class Scene {
     const off = (this.walkX * 1.25) % 34;
     ctx.fillStyle = this.P.grassDark;
     ctx.beginPath();
-    for (let i = -1; i < 18; i++) {
+    const [g0, g1] = this.visibleRange(34, 0, 20);
+    for (let i = g0; i <= g1; i++) {
       const x = i * 34 - off;
       const h = 28 + 22 * hash(Math.floor((this.walkX * 1.25) / 34) + i);
       ctx.moveTo(x - 12, base);
@@ -1285,9 +1394,9 @@ export class Scene {
     for (const c of game.creatures) {
       if (c.state !== 'approach') continue;
       const p = this.creaturePos(c);
-      if (p.x > -14 && p.x < W + 14) continue;
-      const left = p.x < 0;
-      const ax = left ? 16 : W - 16;
+      if (p.x > this.left - 14 && p.x < this.right + 14) continue;
+      const left = p.x < this.left;
+      const ax = left ? this.left + 16 : this.right - 16;
       const ay = clamp(p.y, 170, this.groundY - 60);
       const tti = game.timeToImpact(c);
       const urgency = clamp(1 - (tti - ZONE_TIME) / 2.5, 0.35, 1);
@@ -1378,10 +1487,8 @@ export class Scene {
   }
 }
 
-function petalPathSmall(ctx) {
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.quadraticCurveTo(4, -5, 0, -11);
-  ctx.quadraticCurveTo(-4, -5, 0, 0);
-  ctx.closePath();
-}
+// Direcciones (coseno, seno) de los 8 pétalos de las flores del jardín.
+const PETAL_DIRS = Array.from({ length: 8 }, (_, i) => {
+  const a = (i / 8) * TAU + Math.PI / 2;
+  return [Math.cos(a), Math.sin(a)];
+});

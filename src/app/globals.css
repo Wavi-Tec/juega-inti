@@ -75,89 +75,93 @@ button {
    Escenario 9:16 y Presentación Ambiental
    ========================================================================== */
 
+/* El mundo del juego (lienzo) ocupa toda la pantalla, en celular, tablet o escritorio.
+   La jugabilidad, el marcador y los botones viven en una columna 9:16 centrada (.stage):
+   en un celular vertical es la pantalla entera; en pantallas anchas el jardín y el clima
+   continúan a ambos lados. */
 .app {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at 12% 18%, #fedfe9 0, transparent 48%),
-    radial-gradient(circle at 88% 12%, #daf1e4 0, transparent 46%),
-    radial-gradient(circle at 78% 88%, #fff0cf 0, transparent 48%),
-    radial-gradient(circle at 18% 82%, #e5f1fb 0, transparent 45%),
-    #fcf1f5;
+  background: #cfe3ee;
   overflow: hidden;
-}
-
-/* Decoración ambiental sutil detrás del teléfono en pantallas amplias */
-.app::before {
-  content: '';
-  position: absolute;
-  width: 90vw;
-  height: 90vh;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(229, 64, 127, 0.06) 0%, rgba(46, 158, 91, 0.04) 50%, transparent 70%);
-  filter: blur(60px);
-  pointer-events: none;
-  animation: ambient-drift 18s ease-in-out infinite alternate;
-}
-
-.stage {
-  position: relative;
-  width: min(100vw, calc(100vh * 9 / 16));
-  width: min(100vw, calc(100dvh * 9 / 16));
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
-  container-type: size;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
-  background: #cfe3ee;
 }
 
-/* En escritorio y tablet: marco premium de dispositivo móvil de última generación */
-@media (min-aspect-ratio: 10/16) {
-  .stage {
-    height: calc(100dvh - 36px);
-    width: calc((100dvh - 36px) * 9 / 16);
-    max-height: 900px;
-    max-width: 506px;
-    border-radius: 42px;
-    border: 3.5px solid rgba(255, 255, 255, 0.7);
-    box-shadow:
-      0 0 0 10px #181920,
-      0 0 0 12.5px rgba(255, 255, 255, 0.35),
-      0 30px 85px -15px rgba(75, 12, 50, 0.38),
-      0 12px 35px -5px rgba(0, 0, 0, 0.22);
-  }
-
-  /* Isla dinámica / notch superior para realismo móvil */
-  .stage::before {
-    content: '';
-    position: absolute;
-    top: 9px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 22%;
-    height: 17px;
-    background: #111215;
-    border-radius: 99px;
-    z-index: 45;
-    pointer-events: none;
-    box-shadow: inset 0 -1px 1px rgba(255, 255, 255, 0.12);
-  }
-}
-
-.stage-canvas {
+.world-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
   touch-action: none;
+}
+
+/* Pausa y «Conoce el producto»: la columna se oscurece con su propia capa (.screen-dim,
+   .sheet-backdrop) y estas dos franjas oscurecen los costados con el mismo tono. */
+.app::before,
+.app::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: calc((100% - min(100vw, 100vh * 9 / 16)) / 2);
+  width: calc((100% - min(100vw, 100dvh * 9 / 16)) / 2);
+  background: var(--dim-bg, transparent);
+  backdrop-filter: var(--dim-blur, none);
+  -webkit-backdrop-filter: var(--dim-blur, none);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app::before {
+  left: 0;
+}
+
+.app::after {
+  right: 0;
+}
+
+.app.dim-pausa {
+  --dim-bg: rgba(35, 12, 30, 0.52);
+  --dim-blur: blur(8px);
+}
+
+.app.dim-producto {
+  --dim-bg: rgba(35, 12, 30, 0.55);
+  --dim-blur: blur(8px);
+}
+
+.app.dim-pausa::before,
+.app.dim-pausa::after,
+.app.dim-producto::before,
+.app.dim-producto::after {
+  opacity: 1;
+  animation: fade 0.25s ease-out both;
+}
+
+.stage {
+  position: relative;
+  z-index: 2;
+  width: min(100vw, calc(100vh * 9 / 16));
+  width: min(100vw, calc(100dvh * 9 / 16));
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  container-type: size;
+  /* Transparente al toque: los toques llegan al lienzo (Echi) salvo sobre controles y pantallas. */
+  pointer-events: none;
+}
+
+.stage .screen,
+.stage .sheet-backdrop {
+  pointer-events: auto;
 }
 
 /* ==========================================================================
@@ -610,6 +614,7 @@ button {
   padding: calc(env(safe-area-inset-top) + 4.8cqw) 4.6cqw calc(env(safe-area-inset-bottom) + 5cqw);
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .screen-dim {
@@ -696,6 +701,45 @@ button {
   animation: spin-gentle 12s linear infinite;
 }
 
+/* Marca del producto + logo de INTI (distribuidor) */
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2.6cqw;
+}
+
+.inti-logo {
+  display: block;
+  width: auto;
+  height: 5.4cqw;
+}
+
+.brand-row .inti-logo {
+  padding-left: 2.6cqw;
+  border-left: 1px solid rgba(58, 31, 43, 0.15);
+  box-sizing: content-box;
+}
+
+.distribuido {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.6cqw;
+  margin: 0;
+  color: var(--muted);
+  font: 700 3cqw/1 var(--font-body);
+}
+
+.distribuido .inti-logo {
+  height: 4.4cqw;
+}
+
+.sheet-title .distribuido {
+  justify-content: flex-start;
+  margin-top: 1.6cqw;
+}
+
 .title {
   display: flex;
   flex-direction: column;
@@ -779,6 +823,22 @@ button {
 .how svg {
   font-size: 7.6cqw;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
+}
+
+/* Escenario bajo (9:16 exacto, escritorio): portada más compacta para no tapar a los personajes. */
+@container (min-aspect-ratio: 1 / 1.9) {
+  .title-main {
+    font-size: 13.5cqw;
+  }
+
+  .title-sub {
+    margin-top: 0.8cqw;
+    font-size: 6.6cqw;
+  }
+
+  .how svg {
+    font-size: 6.4cqw;
+  }
 }
 
 /* Leyenda de tipos de virus con tarjetas temáticas */
@@ -1036,26 +1096,42 @@ button {
    Pantalla de Resultados
    ========================================================================== */
 
+/* El resultado debe entrar en una pantalla: ilustración, espacios y puntaje se ajustan
+   también a la altura disponible (cqh = 1 % del alto de la columna). */
+.screen-result {
+  padding-top: calc(env(safe-area-inset-top) + min(4.8cqw, 2.4cqh));
+  padding-bottom: calc(env(safe-area-inset-bottom) + min(5cqw, 2.4cqh));
+}
+
 .result-card {
-  gap: 2.6cqw;
-  padding: 4.5cqw 4.8cqw;
+  gap: min(2.4cqw, 0.9cqh);
+  padding: min(4.2cqw, 2cqh) 4.6cqw;
 }
 
 .finale-art {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
+  height: min(52cqw, 19.5cqh);
   border-radius: 4.5cqw;
   box-shadow: 0 2cqw 5cqw rgba(80, 20, 60, 0.15), inset 0 0 0 0.4cqw rgba(255, 255, 255, 0.8);
 }
 
 .result-score {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4cqw;
+}
+
+.result-score-num {
+  display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .result-score strong {
-  font: 900 18cqw/0.95 var(--font-display);
+  font: 900 min(16cqw, 7.4cqh) / 0.95 var(--font-display);
   background: linear-gradient(180deg, #ff4d8d 0%, var(--pink) 50%, #b81452 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1064,7 +1140,6 @@ button {
 }
 
 .badge {
-  margin-top: 1.6cqw;
   padding: 1cqw 3.6cqw;
   border-radius: 99px;
   background: linear-gradient(135deg, #ffe066 0%, #ffc107 55%, #f59f00 100%);
@@ -1075,7 +1150,6 @@ button {
 }
 
 .muted {
-  margin-top: 1cqw;
   color: var(--muted);
   font: 700 3.6cqw var(--font-body);
 }
@@ -1093,7 +1167,7 @@ button {
 .result-stats li {
   display: flex;
   flex-direction: column;
-  padding: 2cqw 1cqw;
+  padding: min(2cqw, 0.9cqh) 1cqw;
   border-radius: 3.6cqw;
   background: var(--green-surface);
   border: 1px solid rgba(46, 158, 91, 0.18);
@@ -1103,14 +1177,14 @@ button {
 }
 
 .result-stats strong {
-  font: 900 7.2cqw/1 var(--font-display);
+  font: 900 6.4cqw/1 var(--font-display);
   color: #11572c;
 }
 
 .result-types {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2cqw;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.8cqw;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -1121,9 +1195,10 @@ button {
   display: grid;
   grid-template-columns: auto 1fr;
   grid-template-rows: auto auto;
-  column-gap: 1.4cqw;
+  column-gap: 1.2cqw;
   align-items: center;
-  padding: 1.8cqw 2.2cqw;
+  min-width: 0;
+  padding: min(1.8cqw, 0.8cqh) 1.6cqw;
   border-radius: 3.6cqw;
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid rgba(0, 0, 0, 0.06);
@@ -1148,7 +1223,7 @@ button {
 
 .result-types svg {
   grid-row: span 2;
-  font-size: 8.2cqw;
+  font-size: 7.4cqw;
 }
 
 .result-types strong {
@@ -1157,7 +1232,7 @@ button {
 }
 
 .result-types span {
-  font: 700 2.9cqw/1.2 var(--font-body);
+  font: 700 2.7cqw/1.2 var(--font-body);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -1172,40 +1247,51 @@ button {
   color: #6b3300;
 }
 
+.result-card .result-extra {
+  flex-wrap: nowrap;
+  gap: 1.4cqw;
+  font-size: 3cqw;
+}
+
 .result-extra span {
-  padding: 1.2cqw 3cqw;
+  padding: 1cqw 2.6cqw;
   border-radius: 99px;
   background: var(--gold-surface);
   border: 1px solid rgba(255, 210, 63, 0.4);
+  white-space: nowrap;
 }
 
-.result-phases {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 1.6cqw;
-  margin: 0;
-  font: 800 3.3cqw var(--font-body);
-}
-
-.result-phases span {
-  padding: 1cqw 2.8cqw;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+.result-extra .result-phases {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--ink);
 }
 
 .result-actions {
   display: flex;
   flex-direction: column;
-  gap: 2.6cqw;
+  gap: min(2.6cqw, 1.2cqh);
   width: 100%;
+}
+
+.result-actions .btn-xl {
+  min-height: min(16cqw, 7.6cqh);
+}
+
+.result-card .presenter-note {
+  padding: min(2.2cqw, 1cqh) 3.6cqw;
+  font-size: 3.1cqw;
 }
 
 .fineprint {
   margin: 0;
   color: var(--muted);
   font: 600 2.9cqw/1.4 var(--font-body);
+}
+
+.result-card .fineprint {
+  font-size: 2.7cqw;
+  line-height: 1.3;
 }
 
 /* ==========================================================================
@@ -1260,6 +1346,15 @@ button {
   width: 22cqw;
   height: auto;
   filter: drop-shadow(0 2cqw 3cqw rgba(80, 20, 60, 0.15));
+}
+
+/* Foto real (frasco y caja): un poco más grande que la ilustración */
+.sheet-head:has(.sheet-bottle.is-photo) {
+  grid-template-columns: 27cqw 1fr auto;
+}
+
+.sheet-bottle.is-photo {
+  width: 27cqw;
 }
 
 .sheet-title h2 {

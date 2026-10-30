@@ -14,7 +14,10 @@ npm start          # sirve la compilación
 npm test           # pruebas del motor (temporizador, etapas, puntuación, reinicio)
 ```
 
-Para usarlo en un stand, abre la página en el celular y, si el navegador lo ofrece,
+Funciona en cualquier pantalla: en un celular vertical ocupa toda la pantalla; en tablet,
+laptop o monitor el jardín y el clima llenan todo el ancho y la zona de juego (personajes,
+marcador y botón) queda centrada. En un celular en horizontal pide girarlo.
+Para usarlo en un stand con celular, abre la página y, si el navegador lo ofrece,
 «Agregar a pantalla de inicio» para verlo a pantalla completa.
 
 ## Cómo se juega
@@ -51,7 +54,9 @@ Puntos (sin multiplicadores): cada virus bloqueado suma exactamente su valor, qu
 
 - `src/content/producto.js`: mensajes de cada clima, frase para quien presenta, aviso y textos de «Conoce el producto».
   **Antes de publicar, reemplaza el resumen del prospecto por el texto oficial aprobado.**
-  Para mostrar una foto real del frasco, colócala en `public/` y pon su ruta en `imagenFrasco`.
+- `src/assets/marca/`: foto real del producto (`echinacea-medica.png`, frasco y caja con fondo
+  transparente) y logo de INTI (`inti-logo.webp`). Se usan en la portada, en el final y en
+  «Conoce el producto»; para cambiarlos basta con reemplazar los archivos con el mismo nombre.
 - `src/game/config.js`: duración, velocidades, frecuencia de criaturas, duración del escudo y puntos.
 - `src/game/engine.js`: lógica de la partida (sin dibujo; probada en `tests/engine.test.mjs`).
 - `src/game/scene.js` y `src/game/art.js`: escenario, clima y personajes (Canvas 2D).

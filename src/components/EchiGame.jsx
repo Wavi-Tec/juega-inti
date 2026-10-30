@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import Image from 'next/image';
 import { Game } from '@/game/engine';
 import { Scene } from '@/game/scene';
 import { sound } from '@/game/audio';
-import { drawFinale } from '@/game/art';
+import { drawFinale, loadImage } from '@/game/art';
 import { GAME_DURATION, PHASES, CREATURE_TYPES } from '@/game/config';
 import { subscribe, getRecord, getSoundOn, saveRecord, saveSoundOn } from '@/game/storage';
-import { MENSAJES_CLIMA, FRASE_PRESENTADOR, AVISO_FANTASIA } from '@/content/producto';
+import { MENSAJES_CLIMA, FRASE_PRESENTADOR, AVISO_FANTASIA, PRODUCTO } from '@/content/producto';
 import ArtCanvas from './ArtCanvas';
 import ProductPanel from './ProductPanel';
 import {
@@ -38,6 +39,10 @@ const vibrate = (ms) => {
 };
 const serverFalse = () => 0;
 const serverTrue = () => true;
+
+// Escena final con la foto real del producto entre Echi y la persona.
+const productSrc = PRODUCTO.imagenFrasco?.src ?? null;
+const drawFinaleArt = (ctx, w, h, t, font) => drawFinale(ctx, w, h, t, font, productSrc);
 
 export default function EchiGame() {
   const stageRef = useRef(null);
@@ -77,16 +82,29 @@ export default function EchiGame() {
     gameRef.current = game;
     sceneRef.current = scene;
     sound.setEnabled(getSoundOn());
+    loadImage(productSrc); // se precarga para que esté lista al final de la partida
 
     // Solo para pruebas: /?debug expone el estado en window.__echi
     if (new URLSearchParams(window.location.search).has('debug')) {
       window.__echi = { game, scene, mode: () => modeRef.current };
     }
 
-    const fit = () => scene.resize(stage.clientWidth, stage.clientHeight, window.devicePixelRatio || 1);
+    // El lienzo ocupa toda la ventana; la columna 9:16 (stage) marca dónde va la jugabilidad.
+    const fit = () => {
+      const c = canvas.getBoundingClientRect();
+      const s = stage.getBoundingClientRect();
+      scene.resize(c.width, c.height, window.devicePixelRatio || 1, {
+        left: s.left - c.left,
+        top: s.top - c.top,
+        width: s.width,
+        height: s.height,
+      });
+    };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(stage);
+    ro.observe(canvas);
+    window.addEventListener('resize', fit);
 
     const L = loopRef.current;
 
@@ -172,10 +190,21 @@ export default function EchiGame() {
 
     let raf = 0;
     let last = performance.now();
+    let slowFrames = 0;
     const frame = (now) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const rawDt = (now - last) / 1000;
+      const dt = Math.min(0.05, rawDt);
       last = now;
       const m = modeRef.current;
+
+      // Calidad adaptativa: si el equipo no sostiene ~40 fps, baja la resolución interna del lienzo.
+      if (rawDt > 1 / 40 && rawDt < 0.5) slowFrames += 1;
+      else slowFrames = Math.max(0, slowFrames - 2);
+      if (slowFrames > 90 && scene.quality > 0.55) {
+        scene.quality *= 0.8;
+        slowFrames = 0;
+        fit();
+      }
 
       if (m === 'cuenta') {
         L.countdown -= dt;
@@ -220,6 +249,7 @@ export default function EchiGame() {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      window.removeEventListener('resize', fit);
       sound.stopMusic();
     };
   }, [setMode]);
@@ -365,15 +395,15 @@ export default function EchiGame() {
   const mensaje = toast ? MENSAJES_CLIMA[toast.index] : null;
 
   return (
-    <main className="app">
+    <main className={`app ${mode === 'pausa' ? 'dim-pausa' : ''} ${showProduct ? 'dim-producto' : ''}`}>
+      <canvas
+        ref={canvasRef}
+        className="world-canvas"
+        onPointerDown={onCanvasPointer}
+        role="img"
+        aria-label="Una persona camina por un jardín junto a Echi, una flor de equinácea, mientras cambia el clima."
+      />
       <div className={`stage mode-${mode}`} ref={stageRef}>
-        <canvas
-          ref={canvasRef}
-          className="stage-canvas"
-          onPointerDown={onCanvasPointer}
-          role="img"
-          aria-label="Una persona camina por un jardín junto a Echi, una flor de equinácea, mientras cambia el clima."
-        />
 
         {inGame && (
           <header className="hud">
@@ -472,9 +502,18 @@ export default function EchiGame() {
         {mode === 'inicio' && (
           <section className="screen screen-start">
             <div className="card start-card">
-              <p className="brand-chip">
-                <FlowerIcon /> Echinacea Médica
-              </p>
+              <div className="brand-row">
+                <p className="brand-chip">
+                  <FlowerIcon /> {PRODUCTO.nombre}
+                </p>
+                <Image
+                  className="inti-logo"
+                  src={PRODUCTO.logoDistribuidor}
+                  alt={PRODUCTO.distribuidor}
+                  sizes="80px"
+                  preload
+                />
+              </div>
               <h1 className="title">
                 <span className="title-main">Echi</span>
                 <span className="title-sub">te acompaña</span>
@@ -551,14 +590,20 @@ export default function EchiGame() {
               <p className="kicker">¡Paseo completado!</p>
               <ArtCanvas
                 className="finale-art"
-                draw={drawFinale}
+                draw={drawFinaleArt}
                 width={340}
                 height={210}
                 label="Echi junto a la persona y el frasco de Echinacea Médica"
               />
+              <p className="distribuido">
+                {PRODUCTO.nombre} · Distribuido por
+                <Image className="inti-logo" src={PRODUCTO.logoDistribuidor} alt={PRODUCTO.distribuidor} sizes="80px" />
+              </p>
               <div className="result-score">
-                <span className="hud-label">Puntos</span>
-                <strong>{result.score}</strong>
+                <div className="result-score-num">
+                  <span className="hud-label">Puntos</span>
+                  <strong>{result.score}</strong>
+                </div>
                 {result.isRecord ? (
                   <span className="badge">¡Nuevo récord!</span>
                 ) : (
@@ -587,17 +632,14 @@ export default function EchiGame() {
                   </li>
                 ))}
               </ul>
-              {result.groups > 0 && (
-                <p className="result-extra">
-                  <span>🌸 {result.groups} grupos completos</span>
-                </p>
-              )}
-              <p className="result-phases">
-                {MENSAJES_CLIMA.map((m) => (
-                  <span key={m.etapa}>
-                    {m.icono} {m.etapa} ✓
-                  </span>
-                ))}
+              <p className="result-extra">
+                {result.groups > 0 && <span>🌸 {result.groups} grupos completos</span>}
+                <span
+                  className="result-phases"
+                  aria-label={`Etapas superadas: ${MENSAJES_CLIMA.map((m) => m.etapa).join(', ')}`}
+                >
+                  {MENSAJES_CLIMA.map((m) => m.icono).join(' ')} {MENSAJES_CLIMA.length} etapas ✓
+                </span>
               </p>
               <div className="result-actions">
                 <button className="btn btn-primary btn-xl" onClick={startGame}>
