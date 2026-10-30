@@ -1104,15 +1104,16 @@ button {
 }
 
 .result-card {
-  gap: min(2.4cqw, 0.9cqh);
-  padding: min(4.2cqw, 2cqh) 4.6cqw;
+  gap: min(3cqw, 1.5cqh);
+  padding: min(4.6cqw, 2.4cqh) 4.6cqw;
 }
 
+/* La ilustración con el producto es la protagonista del resultado. */
 .finale-art {
   display: block;
   width: auto;
   max-width: 100%;
-  height: min(52cqw, 19.5cqh);
+  height: min(60cqw, 34cqh);
   border-radius: 4.5cqw;
   box-shadow: 0 2cqw 5cqw rgba(80, 20, 60, 0.15), inset 0 0 0 0.4cqw rgba(255, 255, 255, 0.8);
 }
@@ -1154,56 +1155,46 @@ button {
   font: 700 3.6cqw var(--font-body);
 }
 
-.result-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2cqw;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.result-stats li {
+/* Resumen en una sola fila: cuántos virus de cada tipo y la mejor racha, con íconos. */
+.result-chips {
   display: flex;
-  flex-direction: column;
-  padding: min(2cqw, 0.9cqh) 1cqw;
-  border-radius: 3.6cqw;
-  background: var(--green-surface);
-  border: 1px solid rgba(46, 158, 91, 0.18);
-  color: var(--green-dark);
-  font: 700 3.1cqw/1.25 var(--font-body);
-  box-shadow: 0 0.8cqw 2cqw rgba(46, 158, 91, 0.08);
-}
-
-.result-stats strong {
-  font: 900 6.4cqw/1 var(--font-display);
-  color: #11572c;
-}
-
-.result-types {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-content: center;
   gap: 1.8cqw;
-  width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.result-types li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 1.2cqw;
+.result-chips li {
+  display: inline-flex;
   align-items: center;
-  min-width: 0;
-  padding: min(1.8cqw, 0.8cqh) 1.6cqw;
-  border-radius: 3.6cqw;
+  gap: 1.2cqw;
+  padding: 0.9cqw 2.6cqw 0.9cqw 1.4cqw;
+  border-radius: 99px;
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid rgba(0, 0, 0, 0.06);
-  text-align: left;
-  box-shadow: 0 0.8cqw 2cqw rgba(0, 0, 0, 0.04);
+}
+
+.result-chips svg {
+  font-size: 6.4cqw;
+}
+
+.result-chips strong {
+  font: 900 4.8cqw/1 var(--font-display);
+  color: var(--ink);
+}
+
+.result-chips .result-streak {
+  padding-left: 2.6cqw;
+  background: var(--pink-pale, rgba(255, 214, 230, 0.6));
+  border-color: rgba(229, 64, 127, 0.25);
+}
+
+.result-streak span {
+  color: var(--pink-dark);
+  font: 800 2.8cqw/1 var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .result-type-comun {
@@ -1221,52 +1212,6 @@ button {
   border-color: rgba(255, 204, 46, 0.42) !important;
 }
 
-.result-types svg {
-  grid-row: span 2;
-  font-size: 7.4cqw;
-}
-
-.result-types strong {
-  font: 900 5.6cqw/1 var(--font-display);
-  color: var(--ink);
-}
-
-.result-types span {
-  font: 700 2.7cqw/1.2 var(--font-body);
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.result-extra {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 1.6cqw;
-  margin: 0;
-  font: 800 3.4cqw var(--font-body);
-  color: #6b3300;
-}
-
-.result-card .result-extra {
-  flex-wrap: nowrap;
-  gap: 1.4cqw;
-  font-size: 3cqw;
-}
-
-.result-extra span {
-  padding: 1cqw 2.6cqw;
-  border-radius: 99px;
-  background: var(--gold-surface);
-  border: 1px solid rgba(255, 210, 63, 0.4);
-  white-space: nowrap;
-}
-
-.result-extra .result-phases {
-  background: rgba(255, 255, 255, 0.75);
-  border-color: rgba(0, 0, 0, 0.08);
-  color: var(--ink);
-}
-
 .result-actions {
   display: flex;
   flex-direction: column;
@@ -1276,11 +1221,6 @@ button {
 
 .result-actions .btn-xl {
   min-height: min(16cqw, 7.6cqh);
-}
-
-.result-card .presenter-note {
-  padding: min(2.2cqw, 1cqh) 3.6cqw;
-  font-size: 3.1cqw;
 }
 
 .fineprint {

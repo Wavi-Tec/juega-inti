@@ -8,7 +8,7 @@ import { sound } from '@/game/audio';
 import { drawFinale, loadImage } from '@/game/art';
 import { GAME_DURATION, PHASES, CREATURE_TYPES } from '@/game/config';
 import { subscribe, getRecord, getSoundOn, saveRecord, saveSoundOn } from '@/game/storage';
-import { MENSAJES_CLIMA, FRASE_PRESENTADOR, AVISO_FANTASIA, PRODUCTO } from '@/content/producto';
+import { MENSAJES_CLIMA, FRASE_PRESENTADOR, AVISO_FANTASIA_CORTO, PRODUCTO } from '@/content/producto';
 import ArtCanvas from './ArtCanvas';
 import ProductPanel from './ProductPanel';
 import {
@@ -592,11 +592,11 @@ export default function EchiGame() {
                 className="finale-art"
                 draw={drawFinaleArt}
                 width={340}
-                height={210}
+                height={250}
                 label="Echi junto a la persona y el frasco de Echinacea Médica"
               />
               <p className="distribuido">
-                {PRODUCTO.nombre} · Distribuido por
+                Distribuido por
                 <Image className="inti-logo" src={PRODUCTO.logoDistribuidor} alt={PRODUCTO.distribuidor} sizes="80px" />
               </p>
               <div className="result-score">
@@ -610,37 +610,22 @@ export default function EchiGame() {
                   <span className="muted">Récord: {record}</span>
                 )}
               </div>
-              <ul className="result-stats">
-                <li>
-                  <strong>{result.blocks}</strong> bloqueos
-                </li>
-                <li>
-                  <strong>{result.perfects}</strong> perfectos
-                </li>
-                <li>
-                  <strong>{result.bestStreak}</strong> mejor racha
-                </li>
-              </ul>
-              <ul className="result-types" aria-label="Virus bloqueados por tipo">
+              <ul className="result-chips" aria-label="Resumen de la partida">
                 {CREATURE_TYPES.map((t, i) => (
-                  <li key={t.id} className={`result-type-${t.id}`}>
+                  <li
+                    key={t.id}
+                    className={`result-type-${t.id}`}
+                    aria-label={`${result.byType[i]} ${t.name.toLowerCase()} (+${t.points} cada uno)`}
+                  >
                     <CreatureIcon variant={t.id} />
-                    <strong>×{result.byType[i]}</strong>
-                    <span>
-                      {t.name.toLowerCase()} +{t.points}
-                    </span>
+                    <strong>{result.byType[i]}</strong>
                   </li>
                 ))}
+                <li className="result-streak" aria-label={`Mejor racha: ${result.bestStreak}`}>
+                  <span>racha</span>
+                  <strong>{result.bestStreak}</strong>
+                </li>
               </ul>
-              <p className="result-extra">
-                {result.groups > 0 && <span>🌸 {result.groups} grupos completos</span>}
-                <span
-                  className="result-phases"
-                  aria-label={`Etapas superadas: ${MENSAJES_CLIMA.map((m) => m.etapa).join(', ')}`}
-                >
-                  {MENSAJES_CLIMA.map((m) => m.icono).join(' ')} {MENSAJES_CLIMA.length} etapas ✓
-                </span>
-              </p>
               <div className="result-actions">
                 <button className="btn btn-primary btn-xl" onClick={startGame}>
                   Jugar otra vez
@@ -649,10 +634,7 @@ export default function EchiGame() {
                   Conoce el producto
                 </button>
               </div>
-              <p className="presenter-note">
-                <strong>Para quien presenta:</strong> «{FRASE_PRESENTADOR}».
-              </p>
-              <p className="fineprint">{AVISO_FANTASIA}</p>
+              <p className="fineprint">{AVISO_FANTASIA_CORTO}</p>
             </div>
           </section>
         )}

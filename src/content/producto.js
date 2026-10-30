@@ -34,6 +34,9 @@ export const FRASE_PRESENTADOR = 'Mira cómo Echi acompaña al personaje durante
 export const AVISO_FANTASIA =
   'Juego de fantasía: las criaturas y el escudo de pétalos son elementos lúdicos y no representan el efecto del producto.';
 
+// Versión breve para la pantalla de resultado (el texto completo está en «Conoce el producto»).
+export const AVISO_FANTASIA_CORTO = 'Juego de fantasía: no representa el efecto del producto.';
+
 export const PRODUCTO = {
   nombre: 'Echinacea Médica',
   // Foto real del frasco y la caja (fondo transparente). Para cambiarla, reemplaza el archivo

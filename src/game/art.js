@@ -1072,7 +1072,7 @@ export function loadImage(src) {
 // ── Escena final: Echi, la persona y el frasco ─────────────────────────────
 
 /**
- * Composición pensada para un lienzo lógico de 340 × 210.
+ * Composición pensada para un lienzo lógico de 340 × 250.
  * `productSrc`: URL de la foto real del producto; sin ella se dibuja el frasco ilustrado.
  */
 export function drawFinale(ctx, w, h, t, font, productSrc = null) {
@@ -1108,32 +1108,34 @@ export function drawFinale(ctx, w, h, t, font, productSrc = null) {
   ctx.fill();
 
   const ground = h - 12;
+  // Con la foto del producto, el frasco y la caja son lo más grande y los personajes lo
+  // acompañan a los costados.
   drawPerson(ctx, {
-    x: productSrc ? w * 0.19 : w * 0.24,
+    x: productSrc ? w * 0.15 : w * 0.24,
     y: ground,
     t,
     walk: 0,
     walking: 0,
     expr: 'happy',
     weights: [1, 0, 0, 0],
-    scale: 0.82,
+    scale: productSrc ? 0.76 : 0.82,
     wave: 1,
   });
   drawEchi(ctx, {
-    x: productSrc ? w * 0.83 : w * 0.78,
+    x: productSrc ? w * 0.865 : w * 0.78,
     y: ground,
     t,
     hop: Math.abs(Math.sin(t * 3)) * 6,
     expr: 'happy',
     bloom: 1,
-    scale: 0.88,
+    scale: productSrc ? 0.78 : 0.88,
     wave: 1,
     arms: 0.2,
   });
   if (productSrc) {
     const img = loadImage(productSrc);
     if (img) {
-      const ph = 168;
+      const ph = h * 0.84;
       const pw = (ph * img.naturalWidth) / img.naturalHeight;
       const bob = Math.sin(t * 2) * 2;
       ctx.fillStyle = 'rgba(30, 50, 30, 0.2)';
