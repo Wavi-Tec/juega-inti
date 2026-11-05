@@ -18,17 +18,22 @@ export const COLORS = {
   gold: '#FFD23F',
 };
 
+// `warm`: tono de la mitad de abajo del cuerpo. `iris`: color de los ojos.
 export const CREATURE_PALETTES = [
   // nublado
-  { body: '#A45BDB', light: '#CFA2F2', dark: '#6F31A6', outline: '#3B1361', knob: '#FF7FA6' },
+  { body: '#A45BDB', light: '#DDB8F7', dark: '#6F31A6', outline: '#3B1361', knob: '#FF8FB0', warm: '#C8326F', iris: '#FFD23F' },
   // lluvia
-  { body: '#2FB3C6', light: '#8BE2EA', dark: '#1B7C99', outline: '#0D3B52', knob: '#FFD45C' },
+  { body: '#2FB3C6', light: '#A3ECF2', dark: '#1B7C99', outline: '#0D3B52', knob: '#FFD45C', warm: '#2265B8', iris: '#FFB13B' },
   // nieve
-  { body: '#7F93F2', light: '#C9D3FF', dark: '#5160C9', outline: '#222A6E', knob: '#FFFFFF' },
+  { body: '#7F93F2', light: '#D6DEFF', dark: '#5160C9', outline: '#222A6E', knob: '#DFF8FF', warm: '#7A4BD6', iris: '#FFE45C' },
 ];
 
-export const GOLDEN_PALETTE = { body: '#FFCC2E', light: '#FFF2A6', dark: '#DE9A00', outline: '#6B3F00', knob: '#FF7FA6' };
-export const VELOZ_PALETTE = { body: '#FF8A3D', light: '#FFC79A', dark: '#D9531C', outline: '#5C1A05', knob: '#FFE066' };
+export const GOLDEN_PALETTE = {
+  body: '#FFCC2E', light: '#FFF6BA', dark: '#DE9A00', outline: '#6B3F00', knob: '#FF7FA6', warm: '#F07A00', iris: '#E5407F',
+};
+export const VELOZ_PALETTE = {
+  body: '#FF8A3D', light: '#FFD0A8', dark: '#D9531C', outline: '#5C1A05', knob: '#FFE066', warm: '#E0302A', iris: '#FFE45C',
+};
 
 export function drawCrown(ctx, x, y, s = 1) {
   ctx.save();
@@ -70,7 +75,7 @@ export function hexToRgb(hex) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-export function mixColors(rgbList, weights) {
+export function mixRgb(rgbList, weights) {
   let r = 0;
   let g = 0;
   let b = 0;
@@ -81,10 +86,57 @@ export function mixColors(rgbList, weights) {
     g += rgbList[i][1] * w;
     b += rgbList[i][2] * w;
   }
-  return `rgb(${r | 0},${g | 0},${b | 0})`;
+  return [r, g, b];
+}
+
+// Color CSS de un [r, g, b]; `k` > 0 lo aclara hacia el blanco y `k` < 0 lo oscurece.
+export function rgbStr(rgb, k = 0) {
+  const f = (c) => (k >= 0 ? c + (255 - c) * k : c * (1 + k)) | 0;
+  return `rgb(${f(rgb[0])},${f(rgb[1])},${f(rgb[2])})`;
+}
+
+export function mixColors(rgbList, weights) {
+  return rgbStr(mixRgb(rgbList, weights));
 }
 
 // ── Formas base ────────────────────────────────────────────────────────────
+
+// La luz viene de arriba a la izquierda: brillos a la izquierda, sombras abajo a la derecha.
+
+// Sombra difusa en el suelo: da sensación de volumen mejor que una mancha plana.
+export function softShadow(ctx, x, y, rx, ry, alpha) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1, ry / rx);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+  g.addColorStop(0, `rgba(25, 45, 25, ${alpha})`);
+  g.addColorStop(0.55, `rgba(25, 45, 25, ${alpha * 0.7})`);
+  g.addColorStop(1, 'rgba(25, 45, 25, 0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, rx, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+// Degradado a lo largo de un pétalo (de la base, en 0, a la punta, en -len). Un solo degradado
+// sirve para todos los pétalos de una flor porque se aplica con la rotación de cada uno.
+export function petalGradient(ctx, len, stops) {
+  const g = ctx.createLinearGradient(0, 0, 0, -len);
+  for (const [at, color] of stops) g.addColorStop(at, color);
+  return g;
+}
+
+const PETAL_FRONT = [
+  [0, '#B3185A'],
+  [0.6, '#E5407F'],
+  [1, '#FF9CC2'],
+];
+const PETAL_BACK = [
+  [0, '#7E0C3E'],
+  [0.6, '#B31F5C'],
+  [1, '#D9437F'],
+];
 
 // Pétalo de equinácea apuntando hacia -y, con la punta dentada característica.
 export function petalPath(ctx, len, wid) {
@@ -198,14 +250,17 @@ export function drawEchi(ctx, o) {
   ctx.translate(x, y);
   ctx.scale(scale, scale);
 
-  ctx.fillStyle = 'rgba(30, 50, 30, 0.18)';
-  ctx.beginPath();
-  ctx.ellipse(0, 2, 26 - hop * 0.6, 6.5 - hop * 0.12, 0, 0, TAU);
-  ctx.fill();
+  softShadow(ctx, 2, 2, 31 - hop * 0.7, 7.5 - hop * 0.14, 0.3);
 
   ctx.translate(0, -hop);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+
+  // Hojas (pies y brazos) con luz arriba y sombra abajo.
+  const leafFill = ctx.createLinearGradient(0, -7, 0, 7);
+  leafFill.addColorStop(0, '#9BE6B1');
+  leafFill.addColorStop(0.5, COLORS.greenLight);
+  leafFill.addColorStop(1, COLORS.green);
 
   // Pies: dos hojitas que se alternan al caminar.
   const step = Math.sin(walk);
@@ -213,7 +268,7 @@ export function drawEchi(ctx, o) {
     const lift = Math.max(0, step * s) * 4;
     ctx.save();
     ctx.translate(s * 9, -3 - lift);
-    ctx.fillStyle = COLORS.greenLight;
+    ctx.fillStyle = leafFill;
     ctx.strokeStyle = COLORS.greenDark;
     ctx.lineWidth = 2.5;
     ctx.beginPath();
@@ -226,14 +281,21 @@ export function drawEchi(ctx, o) {
   // Tallo
   const sway = Math.sin(t * 2.2) * 3;
   const headY = -98;
+  const stem = (dx) => {
+    ctx.beginPath();
+    ctx.moveTo(dx, -6);
+    ctx.quadraticCurveTo(sway + dx, -40, sway * 0.5 + dx, headY + 24);
+  };
+  stem(0);
   ctx.strokeStyle = COLORS.greenDark;
   ctx.lineWidth = 11;
-  ctx.beginPath();
-  ctx.moveTo(0, -6);
-  ctx.quadraticCurveTo(sway, -40, sway * 0.5, headY + 24);
   ctx.stroke();
   ctx.strokeStyle = COLORS.green;
   ctx.lineWidth = 6.5;
+  ctx.stroke();
+  stem(-1.6);
+  ctx.strokeStyle = '#86DDA0';
+  ctx.lineWidth = 2.2;
   ctx.stroke();
 
   // Hojas-brazos
@@ -250,7 +312,7 @@ export function drawEchi(ctx, o) {
     ctx.translate(sway * 0.6 + s * 2, armY);
     ctx.rotate(ang);
     leafPath(ctx, 34, 13);
-    ctx.fillStyle = COLORS.greenLight;
+    ctx.fillStyle = leafFill;
     ctx.fill();
     ctx.strokeStyle = COLORS.greenDark;
     ctx.lineWidth = 2.5;
@@ -293,15 +355,35 @@ export function drawEchi(ctx, o) {
   }
 
   const petals = 13;
+  // Fila de atrás, más oscura y entre los pétalos de delante: le da volumen a la flor.
+  const back = petalGradient(ctx, 52, PETAL_BACK);
+  for (let i = 0; i < petals; i++) {
+    const a = -Math.PI / 2 + ((i + 0.5) / petals) * TAU + Math.sin(t * 2 + i + 1) * 0.03;
+    const len = 42 + 8 * Math.max(0, Math.sin(a)) + arms * 4;
+    ctx.save();
+    ctx.rotate(a + Math.PI / 2);
+    drawPetal(ctx, len, 17, back, null, null);
+    ctx.restore();
+  }
+  const front = petalGradient(ctx, 56, PETAL_FRONT);
   for (let i = 0; i < petals; i++) {
     const a = -Math.PI / 2 + (i / petals) * TAU + Math.sin(t * 2 + i) * 0.03;
     // Los pétalos de la equinácea caen hacia abajo: los inferiores son más largos.
     const len = 46 + 9 * Math.max(0, Math.sin(a)) + arms * 4;
     ctx.save();
     ctx.rotate(a + Math.PI / 2);
-    drawPetal(ctx, len, 19, COLORS.pink, COLORS.pinkDark, '#FF8DB8');
+    drawPetal(ctx, len, 19, front, COLORS.pinkDark, 'rgba(255, 190, 215, 0.7)');
     ctx.restore();
   }
+
+  // Sombra que el cono proyecta sobre los pétalos
+  const ao = ctx.createRadialGradient(2, 3, 29, 2, 3, 43);
+  ao.addColorStop(0, 'rgba(100, 8, 45, 0.4)');
+  ao.addColorStop(1, 'rgba(100, 8, 45, 0)');
+  ctx.fillStyle = ao;
+  ctx.beginPath();
+  ctx.arc(2, 3, 43, 0, TAU);
+  ctx.fill();
 
   const cg = ctx.createRadialGradient(-9, -11, 3, 0, 0, 34);
   cg.addColorStop(0, COLORS.coneLight);
@@ -320,6 +402,10 @@ export function drawEchi(ctx, o) {
     ctx.arc(dx * 28, dy * 28, 2.3, 0, TAU);
     ctx.fill();
   }
+  ctx.fillStyle = 'rgba(255, 242, 205, 0.45)';
+  ctx.beginPath();
+  ctx.ellipse(-13, -20, 7.5, 3.4, -0.55, 0, TAU);
+  ctx.fill();
 
   drawEchiFace(ctx, expr, look, blink);
   ctx.restore();
@@ -433,9 +519,13 @@ function drawEchiFace(ctx, expr, look, blink) {
 // ── Persona ────────────────────────────────────────────────────────────────
 
 const SKIN = '#F5C7A1';
+const SKIN_LIGHT = '#FFE4D0';
+const SKIN_SHADE = '#E2A27C';
 const SKIN_LINE = '#C98A66';
 const HAIR = '#4A2F23';
+const HAIR_LIGHT = '#7C5242';
 const PANTS = '#3B4A7A';
+const PANTS_LIGHT = '#5A6DA6';
 const PANTS_BACK = '#2E3A63';
 // Abrigo según clima: sol, nublado, lluvia (impermeable), nieve (abrigo)
 const COAT = ['#2E9E5B', '#2E9E5B', '#F2BE3C', '#3E7CC9'].map(hexToRgb);
@@ -460,7 +550,9 @@ export function drawPerson(ctx, o) {
   } = o;
   const rain = weights[2] || 0;
   const snow = weights[3] || 0;
-  const coat = mixColors(COAT, weights);
+  const coatRgb = mixRgb(COAT, weights);
+  const coat = rgbStr(coatRgb);
+  const coatLight = rgbStr(coatRgb, 0.28);
   const coatDark = mixColors(COAT_DARK, weights);
 
   const sw = Math.sin(walk) * walking;
@@ -474,10 +566,7 @@ export function drawPerson(ctx, o) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  ctx.fillStyle = 'rgba(30, 50, 30, 0.2)';
-  ctx.beginPath();
-  ctx.ellipse(4, 2, 34, 7, 0, 0, TAU);
-  ctx.fill();
+  softShadow(ctx, 6, 2, 40, 8.5, 0.32);
 
   const lean = oops ? -0.08 : 0;
   ctx.rotate(lean);
@@ -498,7 +587,8 @@ export function drawPerson(ctx, o) {
   }
   if (wave > 0) frontArm = lerp(frontArm, 1.95 + Math.sin(t * 9) * 0.3, wave);
 
-  const limb = (fromX, fromY, ang, len, width, color) => {
+  // `light`: franja de brillo del lado iluminado, para que se vea redondeado.
+  const limb = (fromX, fromY, ang, len, width, color, light) => {
     const ex = fromX + Math.sin(ang) * len;
     const ey = fromY + Math.cos(ang) * len;
     ctx.strokeStyle = color;
@@ -507,23 +597,33 @@ export function drawPerson(ctx, o) {
     ctx.moveTo(fromX, fromY);
     ctx.lineTo(ex, ey);
     ctx.stroke();
+    if (light) {
+      const ox = -Math.cos(ang) * width * 0.2;
+      const oy = Math.sin(ang) * width * 0.2;
+      ctx.strokeStyle = light;
+      ctx.lineWidth = width * 0.34;
+      ctx.beginPath();
+      ctx.moveTo(fromX + ox, fromY + oy);
+      ctx.lineTo(ex + ox, ey + oy);
+      ctx.stroke();
+    }
     return [ex, ey];
   };
 
   // Brazo de atrás
   const [bhx, bhy] = limb(shoulder.x - 4, shoulder.y, backArm, 42, 13, coatDark);
-  ctx.fillStyle = SKIN;
+  ctx.fillStyle = SKIN_SHADE;
   ctx.beginPath();
   ctx.arc(bhx, bhy, 7, 0, TAU);
   ctx.fill();
 
   // Piernas
   const legs = [
-    [-sw * 0.5, PANTS_BACK, -4],
-    [sw * 0.5, PANTS, 5],
+    [-sw * 0.5, PANTS_BACK, -4, null],
+    [sw * 0.5, PANTS, 5, PANTS_LIGHT],
   ];
-  for (const [ang, color, dx] of legs) {
-    const [fx, fy] = limb(dx, hipY, ang, 50, 15, color);
+  for (const [ang, color, dx, light] of legs) {
+    const [fx, fy] = limb(dx, hipY, ang, 50, 15, color, light);
     ctx.fillStyle = '#FFFFFF';
     ctx.strokeStyle = '#33303F';
     ctx.lineWidth = 2;
@@ -540,13 +640,21 @@ export function drawPerson(ctx, o) {
   }
 
   // Torso
-  ctx.fillStyle = coat;
+  const torso = ctx.createLinearGradient(-23, 0, 23, 0);
+  torso.addColorStop(0, coatLight);
+  torso.addColorStop(0.45, coat);
+  torso.addColorStop(1, rgbStr(coatRgb, -0.16));
+  ctx.fillStyle = torso;
   ctx.strokeStyle = coatDark;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.roundRect(-23, -126 + bob, 46, 74, 18);
   ctx.fill();
   ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(-10, -114 + bob, 9, 5, -0.3, 0, TAU);
+  ctx.fill();
   ctx.beginPath();
   ctx.moveTo(8, -118 + bob);
   ctx.lineTo(8, -56 + bob);
@@ -606,7 +714,11 @@ export function drawPerson(ctx, o) {
   ctx.roundRect(-3, -138 + bob, 14, 14, 4);
   ctx.fill();
 
-  ctx.fillStyle = SKIN;
+  const face = ctx.createRadialGradient(hx + 2, hy - 12, 4, hx, hy, 35);
+  face.addColorStop(0, SKIN_LIGHT);
+  face.addColorStop(0.55, SKIN);
+  face.addColorStop(1, SKIN_SHADE);
+  ctx.fillStyle = face;
   ctx.strokeStyle = SKIN_LINE;
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -615,7 +727,10 @@ export function drawPerson(ctx, o) {
   ctx.stroke();
 
   // Pelo
-  ctx.fillStyle = HAIR;
+  const hair = ctx.createRadialGradient(hx - 14, hy - 26, 2, hx - 4, hy - 8, 42);
+  hair.addColorStop(0, HAIR_LIGHT);
+  hair.addColorStop(1, HAIR);
+  ctx.fillStyle = hair;
   ctx.beginPath();
   ctx.arc(hx, hy, 35, Math.PI * 0.92, Math.PI * 1.97);
   ctx.quadraticCurveTo(hx + 28, hy - 12, hx + 15, hy - 17);
@@ -626,6 +741,11 @@ export function drawPerson(ctx, o) {
   ctx.beginPath();
   ctx.ellipse(hx - 22, hy + 2, 13, 17, 0.2, 0, TAU);
   ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 235, 220, 0.28)';
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.arc(hx, hy, 29, Math.PI * 1.18, Math.PI * 1.45);
+  ctx.stroke();
 
   // Oreja
   ctx.fillStyle = SKIN;
@@ -740,7 +860,7 @@ export function drawPerson(ctx, o) {
   ctx.fill();
 
   // Brazo de delante
-  const [fhx, fhy] = limb(shoulder.x + 6, shoulder.y, frontArm, 42, 13, coat);
+  const [fhx, fhy] = limb(shoulder.x + 6, shoulder.y, frontArm, 42, 13, coat, coatLight);
   ctx.fillStyle = SKIN;
   ctx.beginPath();
   ctx.arc(fhx, fhy, 7.5, 0, TAU);
@@ -751,9 +871,19 @@ export function drawPerson(ctx, o) {
 
 // ── Criaturas ──────────────────────────────────────────────────────────────
 
+// Dirección de la luz (arriba a la izquierda), en radianes.
+const LIGHT = -2.2;
+// Espículas alrededor del cuerpo; abajo quedan libres para las patitas.
+const SPIKE_ANGLES = [-90, -45, 0, 45, 135, 180, -135].map((d) => (d * Math.PI) / 180);
+
+function rgba(hex, a) {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
 /**
  * opciones: x, y, r, t, pal, expr ('grin'|'dizzy'|'tease'), lookX, lookY, rot, scale, alpha, glow,
- * pointy (espinas en punta en lugar de bolitas)
+ * pointy (espículas en punta en lugar de trompetas)
  */
 export function drawCreature(ctx, o) {
   const {
@@ -781,54 +911,103 @@ export function drawCreature(ctx, o) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
+  // La luz se pasa a las coordenadas de la criatura para que no gire con ella.
+  const la = LIGHT - rot;
+  const ldx = Math.cos(la);
+  const ldy = Math.sin(la);
+
   const bodyPath = () => {
     ctx.beginPath();
-    const n = 22;
+    const n = 24;
     for (let i = 0; i <= n; i++) {
       const a = (i / n) * TAU;
-      const rr = r * (1 + 0.05 * Math.sin(a * 5 + t * 6));
+      const rr = r * (1 + 0.035 * Math.sin(a * 5 + t * 6));
       if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
       else ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
     }
     ctx.closePath();
   };
 
-  // Espículas: en punta (veloz) o con bolitas
-  const spikes = pointy ? 8 : 9;
-  for (let j = 0; pointy && j < spikes; j++) {
-    const a = (j / spikes) * TAU + Math.sin(t * 5 + j) * 0.08;
-    const tip = r + 15;
-    ctx.fillStyle = pal.knob;
-    ctx.strokeStyle = pal.outline;
-    ctx.lineWidth = 2.2;
+  // Patitas que patalean en el aire (detrás del cuerpo)
+  ctx.strokeStyle = pal.outline;
+  ctx.lineWidth = 2.2;
+  for (const s of [-1, 1]) {
+    const fx = s * 8.5;
+    const fy = r + 1 + Math.sin(t * 9 + (s > 0 ? Math.PI : 0)) * 2;
+    ctx.fillStyle = pal.body;
     ctx.beginPath();
-    ctx.moveTo(Math.cos(a - 0.26) * r * 0.86, Math.sin(a - 0.26) * r * 0.86);
-    ctx.lineTo(Math.cos(a) * tip, Math.sin(a) * tip);
-    ctx.lineTo(Math.cos(a + 0.26) * r * 0.86, Math.sin(a + 0.26) * r * 0.86);
-    ctx.closePath();
+    ctx.ellipse(fx, fy, 5.6, 5.2, 0, 0, TAU);
     ctx.fill();
     ctx.stroke();
+    ctx.fillStyle = rgba(pal.light, 0.55);
+    ctx.beginPath();
+    ctx.ellipse(fx - 1.6, fy - 0.6, 1.9, 1.3, 0, 0, TAU);
+    ctx.fill();
   }
-  for (let j = 0; !pointy && j < spikes; j++) {
-    const a = (j / spikes) * TAU + Math.sin(t * 3 + j) * 0.12;
-    const cx = Math.cos(a);
-    const cy = Math.sin(a);
+
+  // Espículas. El lado del tallo que mira a la luz va más claro.
+  const stalkUp = ctx.createLinearGradient(0, -5, 0, 5);
+  const stalkDown = ctx.createLinearGradient(0, 5, 0, -5);
+  for (const g of [stalkUp, stalkDown]) {
+    g.addColorStop(0, pal.light);
+    g.addColorStop(0.45, pal.body);
+    g.addColorStop(1, pal.dark);
+  }
+  for (let j = 0; j < SPIKE_ANGLES.length; j++) {
+    const a = SPIKE_ANGLES[j] + Math.sin(t * 3 + j) * 0.1;
+    const lit = Math.cos(a - Math.PI / 2 - la) > 0 ? -1 : 1; // -1: la luz da en el lado -y
+    const base = r * 0.78;
+    ctx.save();
+    ctx.rotate(a);
     ctx.strokeStyle = pal.outline;
-    ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.moveTo(cx * r * 0.8, cy * r * 0.8);
-    ctx.lineTo(cx * (r + 10), cy * (r + 10));
-    ctx.stroke();
-    ctx.strokeStyle = pal.dark;
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.fillStyle = pal.knob;
-    ctx.beginPath();
-    ctx.arc(cx * (r + 11), cy * (r + 11), 5.5, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = pal.outline;
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    if (pointy) {
+      // Veloz: conos en punta, con una mitad iluminada
+      const tip = r + 15;
+      ctx.beginPath();
+      ctx.moveTo(base, -6);
+      ctx.lineTo(tip, 0);
+      ctx.lineTo(base, 6);
+      ctx.closePath();
+      ctx.fillStyle = pal.knob;
+      ctx.fill();
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.beginPath();
+      ctx.moveTo(base, 6 * lit);
+      ctx.lineTo(tip - 2, 0);
+      ctx.lineTo(base, 0);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      // Tallo que se afina y termina en una trompeta con su disco de color
+      const tip = r + 12 + Math.sin(t * 4 + j * 1.7) * 1.2;
+      const mid = (base + tip) / 2;
+      ctx.beginPath();
+      ctx.moveTo(base, -5.5);
+      ctx.quadraticCurveTo(mid, -2, tip, -2.6);
+      ctx.lineTo(tip, 2.6);
+      ctx.quadraticCurveTo(mid, 2, base, 5.5);
+      ctx.closePath();
+      ctx.fillStyle = lit < 0 ? stalkUp : stalkDown;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = pal.dark;
+      ctx.beginPath();
+      ctx.ellipse(tip, 0, 3.4, 7, 0, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = pal.knob;
+      ctx.beginPath();
+      ctx.ellipse(tip + 0.9, 0, 2.2, 5, 0, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.beginPath();
+      ctx.ellipse(tip + 1.2, 2.2 * lit, 0.9, 1.5, 0, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   if (glow > 0) {
@@ -838,31 +1017,74 @@ export function drawCreature(ctx, o) {
     ctx.stroke();
   }
 
+  // Cuerpo: esfera iluminada arriba a la izquierda, con la mitad de abajo de otro tono
   bodyPath();
-  ctx.fillStyle = pal.body;
+  const body = ctx.createRadialGradient(ldx * r * 0.45, ldy * r * 0.45, r * 0.06, 0, 0, r * 1.08);
+  body.addColorStop(0, pal.light);
+  body.addColorStop(0.42, pal.body);
+  body.addColorStop(1, pal.dark);
+  ctx.fillStyle = body;
   ctx.fill();
+  const warm = ctx.createLinearGradient(0, -r * 0.15, 0, r);
+  warm.addColorStop(0, rgba(pal.warm, 0));
+  warm.addColorStop(1, rgba(pal.warm, 0.7));
+  ctx.fillStyle = warm;
+  ctx.fill();
+
+  ctx.save();
+  ctx.clip();
+  // Sombra propia: media luna del lado contrario a la luz
+  const sx = ldx * r * 0.2;
+  const sy = ldy * r * 0.2;
+  ctx.beginPath();
+  ctx.rect(-r * 2, -r * 2, r * 4, r * 4);
+  ctx.moveTo(sx + r * 0.97, sy);
+  ctx.arc(sx, sy, r * 0.97, 0, TAU);
+  ctx.fillStyle = rgba(pal.outline, 0.3);
+  ctx.fill('evenodd');
+  // Luz rebotada en el borde de la sombra
+  ctx.strokeStyle = rgba(pal.light, 0.45);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, r - 2, la + Math.PI - 0.8, la + Math.PI + 0.8);
+  ctx.stroke();
+  ctx.restore();
+
+  // Manchitas: claras arriba, oscuras abajo
+  ctx.fillStyle = rgba(pal.light, 0.6);
+  ctx.beginPath();
+  ctx.arc(6, -19, 2.2, 0, TAU);
+  ctx.moveTo(13.5, -14);
+  ctx.arc(12, -14, 1.5, 0, TAU);
+  ctx.moveTo(-0.6, -21.5);
+  ctx.arc(-2, -21.5, 1.4, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = rgba(pal.outline, 0.22);
+  ctx.beginPath();
+  ctx.arc(15, 12, 2.6, 0, TAU);
+  ctx.moveTo(-13, 14);
+  ctx.arc(-15, 14, 2, 0, TAU);
+  ctx.fill();
+
+  bodyPath();
   ctx.strokeStyle = pal.outline;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 3.2;
   ctx.stroke();
 
-  // Brillo y manchas
-  ctx.fillStyle = pal.light;
-  ctx.globalAlpha = alpha * 0.55;
+  // Reflejo especular
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
   ctx.beginPath();
-  ctx.ellipse(-r * 0.35, -r * 0.45, r * 0.32, r * 0.2, -0.5, 0, TAU);
+  ctx.ellipse(ldx * r * 0.68, ldy * r * 0.68, r * 0.2, r * 0.1, la + Math.PI / 2, 0, TAU);
   ctx.fill();
-  ctx.globalAlpha = alpha * 0.35;
-  ctx.fillStyle = pal.dark;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
   ctx.beginPath();
-  ctx.arc(r * 0.45, r * 0.4, r * 0.12, 0, TAU);
-  ctx.arc(-r * 0.5, r * 0.3, r * 0.09, 0, TAU);
+  ctx.arc(ldx * r * 0.78 + ldy * 4, ldy * r * 0.78 - ldx * 4, 1.6, 0, TAU);
   ctx.fill();
-  ctx.globalAlpha = alpha;
 
   // Cara
   const ink = pal.outline;
-  const lx = clamp(lookX, -1, 1) * 2.2;
-  const ly = clamp(lookY, -1, 1) * 2.2;
+  const lx = clamp(lookX, -1, 1) * 2;
+  const ly = clamp(lookY, -1, 1) * 2;
   if (expr === 'dizzy') {
     ctx.strokeStyle = ink;
     ctx.lineWidth = 2.2;
@@ -881,62 +1103,93 @@ export function drawCreature(ctx, o) {
     ctx.fill();
   } else {
     for (const s of [-1, 1]) {
-      const winking = expr === 'tease' && s === -1;
-      if (winking) {
+      const ex = s * 9;
+      const ey = -3;
+      if (expr === 'tease' && s === -1) {
+        // Guiño
         ctx.strokeStyle = ink;
-        ctx.lineWidth = 2.6;
+        ctx.lineWidth = 2.8;
         ctx.beginPath();
-        ctx.arc(s * 9, -3, 5, Math.PI * 1.15, Math.PI * 1.85);
+        ctx.arc(ex, ey, 5, Math.PI * 1.15, Math.PI * 1.85);
         ctx.stroke();
         continue;
       }
+      // Ojo con el párpado más bajo hacia el centro de la cara: mirada pícara.
+      // `ex - s * 9` es el lado de adentro del ojo y `ex + s * 9` el de afuera.
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(ex - s * 9, ey - 3.5);
+      ctx.lineTo(ex + s * 9, ey - 8.5);
+      ctx.lineTo(ex + s * 9, ey + 10);
+      ctx.lineTo(ex - s * 9, ey + 10);
+      ctx.closePath();
+      ctx.clip();
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.ellipse(s * 9, -4, 6.8, 7.8, 0, 0, TAU);
+      ctx.ellipse(ex, ey, 6.8, 7.6, 0, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = pal.iris;
+      ctx.beginPath();
+      ctx.arc(ex + lx, ey + 1 + ly, 4.6, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = rgba(pal.outline, 0.45);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#1E0B24';
+      ctx.beginPath();
+      ctx.arc(ex + lx * 1.2, ey + 1 + ly * 1.2, 2.4, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(ex + lx - 1.6, ey - 0.4 + ly, 1.3, 0, TAU);
+      ctx.moveTo(ex + lx + 2.1, ey + 2.8 + ly);
+      ctx.arc(ex + lx + 1.4, ey + 2.8 + ly, 0.7, 0, TAU);
       ctx.fill();
       ctx.strokeStyle = ink;
       ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, 6.8, 7.6, 0, 0, TAU);
       ctx.stroke();
-      ctx.fillStyle = '#2A0F2E';
+      ctx.restore();
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(s * 9 + lx, -3 + ly, 3.6, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(s * 9 + lx - 1.1, -4.4 + ly, 1.2, 0, TAU);
-      ctx.fill();
+      ctx.moveTo(ex - s * 7.8, ey - 3.8);
+      ctx.lineTo(ex + s * 7.6, ey - 8);
+      ctx.stroke();
     }
-    // Cejas pícaras
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(-15, -15);
-    ctx.lineTo(-4, -11);
-    ctx.moveTo(15, -15);
-    ctx.lineTo(4, -11);
-    ctx.stroke();
 
+    ctx.strokeStyle = ink;
     if (expr === 'tease') {
-      ctx.lineWidth = 2.6;
+      // Boca abierta con la lengua afuera
+      ctx.fillStyle = '#3A0F2A';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 6, 7, Math.PI * 0.1, Math.PI * 0.9);
+      ctx.moveTo(-7, 7);
+      ctx.quadraticCurveTo(0, 18, 7, 7);
+      ctx.closePath();
+      ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#FF7A9A';
       ctx.beginPath();
-      ctx.ellipse(2, 13, 4, 5, 0.2, 0, TAU);
+      ctx.ellipse(1.8, 12.6, 3.4, 2.8, 0.2, 0, TAU);
       ctx.fill();
     } else {
+      // Sonrisa ladeada con un colmillo
       ctx.lineWidth = 2.6;
       ctx.beginPath();
-      ctx.arc(0, 5, 8.5, Math.PI * 0.12, Math.PI * 0.88);
+      ctx.moveTo(-7, 8.5);
+      ctx.quadraticCurveTo(0, 15, 7.5, 7.5);
       ctx.stroke();
       ctx.fillStyle = '#FFFFFF';
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.moveTo(2, 12.6);
-      ctx.lineTo(6.5, 11.8);
-      ctx.lineTo(4.6, 16.4);
+      ctx.moveTo(1.5, 11.3);
+      ctx.lineTo(5.2, 9.4);
+      ctx.lineTo(3.8, 14.2);
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
     }
   }
 
@@ -1049,6 +1302,352 @@ export function drawBottle(ctx, x, y, s, font) {
   ctx.roundRect(-36, -118, 6, 104, 3);
   ctx.fill();
 
+  ctx.restore();
+}
+
+// ── Marca junto al camino: carteles y frasco gigante ───────────────────────
+
+// Colores del envase de Echinacea Médica.
+const BRAND = {
+  magenta: '#F03D93',
+  magentaDark: '#A80F5B',
+  yellow: '#FFE11B',
+  blue: '#2F86C2',
+  blueDark: '#17598F',
+  shadow: '#6E0739',
+};
+
+/** Cartel en unidades lógicas. `photo`: alto de la foto del producto, que sobresale por arriba. */
+export const BILLBOARD = { w: 206, h: 110, border: 4, post: 54, photo: 124 };
+/** Margen transparente alrededor de la foto del producto, para su sombra. */
+export const SPRITE_PAD = 8;
+/** Frasco gigante: alto del frasco y medidas del pedestal. */
+export const BOTTLE_STAND = { bottle: 118, radius: 36, height: 20 };
+
+/**
+ * Dibujo fijo (textos, fotos) hecho una sola vez en un lienzo aparte, para no repetirlo en cada
+ * cuadro. Se dibuja a `scale`× para que se vea nítido. Devuelve { img, w, h } en unidades lógicas.
+ */
+export function makeSprite(w, h, draw, scale = 3) {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(w * scale);
+  canvas.height = Math.ceil(h * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  ctx.imageSmoothingQuality = 'high';
+  draw(ctx, scale);
+  return { img: canvas, w, h };
+}
+
+// Achica la fuente lo necesario para que `text` quepa en `maxW`.
+function fitFont(ctx, text, weight, size, maxW, font) {
+  ctx.font = `${weight} ${size}px ${font}`;
+  const w = ctx.measureText(text).width;
+  if (w > maxW) {
+    size *= maxW / w;
+    ctx.font = `${weight} ${size}px ${font}`;
+  }
+  return size;
+}
+
+function quad(ctx, a, b, c, d) {
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]);
+  ctx.lineTo(b[0], b[1]);
+  ctx.lineTo(c[0], c[1]);
+  ctx.lineTo(d[0], d[1]);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * Cara del cartel (w × h) con los colores del envase: el nombre en amarillo sobre magenta,
+ * «100% natural» sobre azul y el distribuidor abajo. La foto del producto se dibuja aparte, a la
+ * derecha, así que los textos van en la columna izquierda.
+ */
+export function drawBillboardFace(ctx, w, h, font, logo) {
+  const col = w * 0.56;
+  const cx = col / 2 + 3;
+  const band = h * 0.55;
+  const strip = 19;
+
+  const blue = ctx.createLinearGradient(0, band, 0, h);
+  blue.addColorStop(0, BRAND.blue);
+  blue.addColorStop(1, BRAND.blueDark);
+  ctx.fillStyle = blue;
+  ctx.fillRect(0, 0, w, h);
+  const magenta = ctx.createLinearGradient(0, 0, 0, band);
+  magenta.addColorStop(0, BRAND.magenta);
+  magenta.addColorStop(1, BRAND.magentaDark);
+  ctx.fillStyle = magenta;
+  ctx.fillRect(0, 0, w, band);
+  ctx.fillStyle = BRAND.yellow;
+  ctx.fillRect(0, band, w, 2.5);
+
+  // Nombre en dos líneas, con relieve
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const size = fitFont(ctx, 'Echinacea', 800, 25, col - 12, font);
+  const y1 = band * 0.33;
+  const y2 = y1 + size * 0.95;
+  const nameWidth = ctx.measureText('Médica').width;
+  for (const [text, y] of [
+    ['Echinacea', y1],
+    ['Médica', y2],
+  ]) {
+    ctx.fillStyle = BRAND.shadow;
+    ctx.fillText(text, cx, y + 2);
+    ctx.fillStyle = BRAND.yellow;
+    ctx.fillText(text, cx, y);
+  }
+  ctx.font = `700 ${size * 0.4}px ${font}`;
+  ctx.fillText('®', cx + nameWidth / 2 + size * 0.24, y2 - size * 0.24);
+
+  ctx.fillStyle = '#FFFFFF';
+  fitFont(ctx, '100% natural', 800, 13, col - 14, font);
+  ctx.fillText('100% natural', cx, (band + 2.5 + h - strip) / 2 + 1);
+
+  // Franja del distribuidor
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, h - strip, w, strip);
+  ctx.font = `700 8.5px ${font}`;
+  const label = 'Distribuido por';
+  const lw = ctx.measureText(label).width;
+  const logoH = 11;
+  const logoW = logo ? (logoH * logo.naturalWidth) / logo.naturalHeight : 24;
+  const x0 = cx - (lw + 5 + logoW) / 2;
+  const sy = h - strip / 2;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = BRAND.magentaDark;
+  ctx.fillText(label, x0, sy + 0.5);
+  if (logo) {
+    ctx.drawImage(logo, x0 + lw + 5, sy - logoH / 2, logoW, logoH);
+  } else {
+    ctx.font = `800 11px ${font}`;
+    ctx.fillStyle = '#1D2F6F';
+    ctx.fillText('INTI', x0 + lw + 5, sy + 0.5);
+  }
+
+  // Sombra del marco y reflejo de vidrio
+  const inner = ctx.createLinearGradient(0, 0, 0, 7);
+  inner.addColorStop(0, 'rgba(0, 0, 0, 0.28)');
+  inner.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = inner;
+  ctx.fillRect(0, 0, w, 7);
+  const gloss = ctx.createLinearGradient(0, 0, w * 0.45, h);
+  gloss.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+  gloss.addColorStop(0.5, 'rgba(255, 255, 255, 0.07)');
+  gloss.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, 0, w, h);
+}
+
+/**
+ * Cartel sobre dos postes. (x, y) = pie del cartel en el suelo. `face` y `photo` son sprites de
+ * makeSprite (la foto falta mientras carga). `side` (-1..1): el cartel muestra su canto hacia el
+ * centro de la pantalla, así al pasar se ve como un objeto con grosor.
+ */
+export function drawBillboard(ctx, o) {
+  const { x, y, t = 0, face, photo, snow = 0, side = 0 } = o;
+  const { w, h, border, post } = BILLBOARD;
+  const L = x - w / 2;
+  const R = x + w / 2;
+  const B = y - post;
+  const T = B - h;
+  const dx = side * 10;
+  const dy = -5;
+
+  softShadow(ctx, x + 8, y + 1, w * 0.52, 9, 0.28);
+
+  // Postes de madera (cilindros), en el plano de atrás
+  for (const px of [x - w * 0.27 + dx, x + w * 0.27 + dx]) {
+    const g = ctx.createLinearGradient(px - 5.5, 0, px + 5.5, 0);
+    g.addColorStop(0, '#B07E50');
+    g.addColorStop(0.35, '#D6A672');
+    g.addColorStop(1, '#5E3D22');
+    ctx.fillStyle = g;
+    ctx.fillRect(px - 5.5, B - 6, 11, y - B + 7);
+    ctx.fillStyle = 'rgba(30, 15, 5, 0.3)';
+    ctx.fillRect(px - 5.5, B, 11, 7);
+  }
+
+  // Grosor: cara superior y canto
+  ctx.fillStyle = '#E4EAF2';
+  quad(ctx, [L, T], [L + dx, T + dy], [R + dx, T + dy], [R, T]);
+  ctx.fillStyle = '#8A97A8';
+  const edge = dx > 0 ? R : L;
+  quad(ctx, [edge, T], [edge + dx, T + dy], [edge + dx, B + dy], [edge, B]);
+
+  // Marco y cara
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(L, T, w, h);
+  ctx.fillStyle = 'rgba(40, 50, 70, 0.18)';
+  ctx.fillRect(L, B - 2, w, 2);
+  const fx = L + border;
+  const fy = T + border;
+  const fw = w - border * 2;
+  const fh = h - border * 2;
+  if (face) ctx.drawImage(face.img, fx, fy, fw, fh);
+
+  // Destello que recorre el cartel cada pocos segundos
+  const k = (t % 6) / 1.3;
+  if (k < 1) {
+    const sx = fx - 60 + k * (fw + 120);
+    const g = ctx.createLinearGradient(sx - 30, fy, sx + 30, fy + fh);
+    g.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    g.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)');
+    g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(fx, fy, fw, fh);
+  }
+
+  if (snow > 0.02) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.95 * snow})`;
+    ctx.beginPath();
+    ctx.roundRect(Math.min(L, L + dx) - 3, T + dy - 5, w + Math.abs(dx) + 6, 9, 4.5);
+    ctx.fill();
+  }
+
+  // Foto del producto, que sobresale del cartel
+  if (photo) {
+    ctx.drawImage(
+      photo.img,
+      R - border - 2 - photo.w + SPRITE_PAD,
+      B - border - photo.h + SPRITE_PAD,
+      photo.w,
+      photo.h
+    );
+  }
+}
+
+/**
+ * Frasco gigante que flota sobre un pedestal con una cinta de la marca. (x, y) = pie del pedestal.
+ * `bottle`: sprite del frasco recortado de la foto; sin él se usa el frasco ilustrado.
+ */
+export function drawBottleDisplay(ctx, o) {
+  const { x, y, t = 0, bottle, font, snow = 0 } = o;
+  const { radius: R, height: H } = BOTTLE_STAND;
+  const ry = R * 0.3;
+  const yb = y - ry; // centro de la elipse de abajo
+  const yt = yb - H; // centro de la elipse de arriba
+  const float = 5 + Math.sin(t * 2) * 2.5;
+  const bh = bottle ? bottle.h : 133;
+  const by = yt - float; // base del frasco
+  const cy = by - bh * 0.5;
+
+  ctx.save();
+  softShadow(ctx, x + 6, y, R * 1.45, 9, 0.3);
+
+  // Resplandor y rayos detrás del frasco
+  const glow = ctx.createRadialGradient(x, cy, 8, x, cy, 92);
+  glow.addColorStop(0, 'rgba(255, 246, 196, 0.8)');
+  glow.addColorStop(1, 'rgba(255, 246, 196, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(x, cy, 92, 0, TAU);
+  ctx.fill();
+  ctx.save();
+  ctx.translate(x, cy);
+  ctx.rotate(t * 0.3);
+  const rays = ctx.createRadialGradient(0, 0, 20, 0, 0, 96);
+  rays.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+  rays.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = rays;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * TAU;
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a - 0.09) * 96, Math.sin(a - 0.09) * 96);
+    ctx.lineTo(Math.cos(a + 0.09) * 96, Math.sin(a + 0.09) * 96);
+    ctx.closePath();
+  }
+  ctx.fill();
+  ctx.restore();
+
+  // Pedestal: cilindro magenta con borde dorado
+  const sideFill = ctx.createLinearGradient(x - R, 0, x + R, 0);
+  sideFill.addColorStop(0, '#F25FA3');
+  sideFill.addColorStop(0.3, '#FF9AC6');
+  sideFill.addColorStop(1, '#9A0B50');
+  ctx.fillStyle = sideFill;
+  ctx.beginPath();
+  ctx.moveTo(x - R, yt);
+  ctx.lineTo(x - R, yb);
+  ctx.ellipse(x, yb, R, ry, 0, Math.PI, 0, true);
+  ctx.lineTo(x + R, yt);
+  ctx.closePath();
+  ctx.fill();
+  const topFill = ctx.createLinearGradient(0, yt - ry, 0, yt + ry);
+  topFill.addColorStop(0, '#FFE6F1');
+  topFill.addColorStop(1, '#FFB3D3');
+  ctx.fillStyle = topFill;
+  ctx.beginPath();
+  ctx.ellipse(x, yt, R, ry, 0, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = COLORS.gold;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  if (snow > 0.02) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * snow})`;
+    ctx.beginPath();
+    ctx.ellipse(x, yt, R - 3, ry - 2, 0, 0, TAU);
+    ctx.fill();
+  }
+
+  // Sombra del frasco sobre el pedestal: más chica cuanto más alto flota
+  ctx.fillStyle = `rgba(120, 10, 60, ${0.4 - float * 0.03})`;
+  ctx.beginPath();
+  ctx.ellipse(x + 2, yt, 21 - float, 5.5 - float * 0.25, 0, 0, TAU);
+  ctx.fill();
+
+  if (bottle) ctx.drawImage(bottle.img, x - bottle.w / 2, by - bottle.h, bottle.w, bottle.h);
+  else drawBottle(ctx, x, by, 0.78, font);
+
+  // Destellos alrededor
+  ctx.fillStyle = '#FFF6C8';
+  for (let i = 0; i < 3; i++) {
+    const k = (t * 0.7 + i / 3) % 1;
+    const a = 1 - Math.abs(k * 2 - 1);
+    ctx.globalAlpha = a;
+    drawSparkle(ctx, x + [-36, 33, -27][i], by - [96, 64, 30][i], 4 + 5 * a, t);
+  }
+  ctx.globalAlpha = 1;
+
+  // Cinta con el nombre, curvada sobre el pedestal
+  const rw = 144;
+  const rh = 21;
+  const ry0 = (yt + yb) / 2 + 3;
+  const rl = x - rw / 2;
+  ctx.fillStyle = '#8A0A49';
+  for (const s of [-1, 1]) {
+    const ex = x + s * (rw / 2 - 4);
+    ctx.beginPath();
+    ctx.moveTo(ex, ry0 - rh / 2 + 5);
+    ctx.lineTo(ex + s * 18, ry0 - rh / 2 + 5);
+    ctx.lineTo(ex + s * 12, ry0 + 5);
+    ctx.lineTo(ex + s * 18, ry0 + rh / 2 + 5);
+    ctx.lineTo(ex, ry0 + rh / 2 + 5);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const ribbon = ctx.createLinearGradient(0, ry0 - rh / 2, 0, ry0 + rh / 2);
+  ribbon.addColorStop(0, BRAND.magenta);
+  ribbon.addColorStop(1, '#B3105F');
+  ctx.fillStyle = ribbon;
+  ctx.beginPath();
+  ctx.moveTo(rl, ry0 - rh / 2);
+  ctx.quadraticCurveTo(x, ry0 - rh / 2 + 7, rl + rw, ry0 - rh / 2);
+  ctx.lineTo(rl + rw, ry0 + rh / 2);
+  ctx.quadraticCurveTo(x, ry0 + rh / 2 + 7, rl, ry0 + rh / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  fitFont(ctx, 'Echinacea Médica', 800, 15, rw - 18, font);
+  ctx.fillStyle = BRAND.shadow;
+  ctx.fillText('Echinacea Médica', x, ry0 + 4.8);
+  ctx.fillStyle = BRAND.yellow;
+  ctx.fillText('Echinacea Médica', x, ry0 + 3.4);
   ctx.restore();
 }
 

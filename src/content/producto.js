@@ -42,6 +42,9 @@ export const PRODUCTO = {
   // Foto real del frasco y la caja (fondo transparente). Para cambiarla, reemplaza el archivo
   // en src/assets/marca/. Con null se muestra la ilustración del frasco.
   imagenFrasco: fotoProducto,
+  // Dónde está el frasco dentro de esa foto (en píxeles), para el frasco gigante que aparece junto
+  // al camino. Si cambias la foto, actualiza el recorte o pon null para usar el frasco ilustrado.
+  recorteFrasco: { x: 0, y: 64, w: 189, h: 493 },
   distribuidor: 'INTI',
   logoDistribuidor: logoInti,
   bajada: 'Extracto de Echinacea purpurea',

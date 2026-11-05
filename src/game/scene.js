@@ -21,13 +21,23 @@ import {
   easeOutBack,
   easeOutCubic,
   hexToRgb,
-  mixColors,
+  mixRgb,
+  rgbStr,
+  petalGradient,
   drawEchi,
   drawPerson,
   drawCreature,
   drawPetal,
   drawSparkle,
   drawSpeechBubble,
+  loadImage,
+  makeSprite,
+  drawBillboardFace,
+  drawBillboard,
+  drawBottleDisplay,
+  BILLBOARD,
+  BOTTLE_STAND,
+  SPRITE_PAD,
 } from './art.js';
 
 export const WORLD_WIDTH = 540;
@@ -77,6 +87,12 @@ function hash(n) {
   return s - Math.floor(s);
 }
 
+// Carteles de la marca y frasco gigante junto al camino: se alternan cada PROP_SPACING, delante
+// del jardín y a su misma velocidad, para que ningún arbusto tape la marca.
+const PROP_SPACING = 520;
+const PROP_PARALLAX = 0.75;
+const PROP_MARGIN = 150;
+
 const MAX_PARTICLES = 420;
 // Cantidades para una columna (W); en pantallas anchas se usan más, hasta estos máximos.
 const BASE_CLOUDS = 7;
@@ -88,11 +104,23 @@ const MAX_SNOW = 500;
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 export class Scene {
-  constructor(canvas, { font = 'sans-serif', reducedMotion = false } = {}) {
+  /**
+   * brand: imágenes para los carteles del camino, o null para no mostrarlos.
+   *   { product: URL de la foto del producto, logo: URL del logo del distribuidor,
+   *     bottleCrop: { x, y, w, h } recorte del frasco dentro de la foto, o null }
+   */
+  constructor(canvas, { font = 'sans-serif', reducedMotion = false, brand = null } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.font = font;
     this.reducedMotion = reducedMotion;
+    this.brand = brand;
+    this.sprites = null;
+    // Los textos de los carteles se vuelven a dibujar cuando termina de cargar la fuente.
+    this.fontsReady = false;
+    globalThis.document?.fonts?.ready.then(() => {
+      this.fontsReady = true;
+    });
     this.W = W;
     this.H = 960;
     this.dpr = 1;
@@ -105,6 +133,7 @@ export class Scene {
     this.walking = 1;
     this.weights = [1, 0, 0, 0];
     this.P = {};
+    this.Prgb = {};
     this.mixPalette();
 
     // Extensión visible del mundo en unidades lógicas. La columna de juego va de 0 a W;
@@ -443,7 +472,10 @@ export class Scene {
   }
 
   mixPalette() {
-    for (const k of PALETTE_KEYS) this.P[k] = mixColors(PALETTES_RGB[k], this.weights);
+    for (const k of PALETTE_KEYS) {
+      this.Prgb[k] = mixRgb(PALETTES_RGB[k], this.weights);
+      this.P[k] = rgbStr(this.Prgb[k]);
+    }
   }
 
   newDrop(initial) {
@@ -588,6 +620,7 @@ export class Scene {
     // Partículas
     for (const p of this.particles) {
       p.life -= dt;
+      if (p.type === 'ring') continue; // los aros crecen en su lugar, no se mueven
       p.vy += (p.g || 0) * dt;
       p.vx *= 1 - dt * 1.2;
       p.x += p.vx * dt;
@@ -762,6 +795,8 @@ export class Scene {
 
     const cloudAlpha = 0.75 + (wCloud + wRain) * 0.25;
     ctx.globalAlpha = cloudAlpha;
+    // Tono intermedio para la parte de abajo de las nubes.
+    this.cloudMid = rgbStr(mixRgb([this.Prgb.cloud, this.Prgb.cloudShade], [0.45, 0.55]));
     const clouds = Math.min(this.clouds.length, Math.round(BASE_CLOUDS * this.span));
     for (let i = 0; i < clouds; i++) {
       const c = this.clouds[i];
@@ -769,34 +804,58 @@ export class Scene {
     }
     ctx.globalAlpha = 1;
 
-    this.drawHills(ctx, gy - 80, 46, 0.006, 0.013, this.walkX * 0.1, P.hillFar);
+    this.drawHills(ctx, gy - 80, 46, 0.006, 0.013, this.walkX * 0.1, 'hillFar');
     this.drawTrees(ctx, gy - 34, wSnow);
-    this.drawHills(ctx, gy - 22, 22, 0.009, 0.021, this.walkX * 0.3, P.hillMid);
+    this.drawHills(ctx, gy - 22, 22, 0.009, 0.021, this.walkX * 0.3, 'hillMid');
     this.drawGarden(ctx, gy - 6, wSnow);
+    this.drawRoadside(ctx, gy - 10, wSnow);
 
     if (wRain > 0.01) {
       ctx.fillStyle = `rgba(40, 60, 95, ${0.16 * wRain})`;
       ctx.fillRect(fx, -30, fw, gy + 30);
     }
 
-    // Suelo y sendero
-    ctx.fillStyle = P.ground;
+    // Suelo y sendero. El sendero tiene relieve: borde de atrás en sombra, centro iluminado y
+    // un canto más oscuro hacia la cámara.
+    const rgb = this.Prgb;
+    const ground = ctx.createLinearGradient(0, gy, 0, this.H);
+    ground.addColorStop(0, P.ground);
+    ground.addColorStop(1, P.groundDark);
+    ctx.fillStyle = ground;
     ctx.fillRect(fx, gy - 10, fw, this.H - gy + 50);
-    ctx.fillStyle = P.path;
-    ctx.fillRect(fx, gy - 6, fw, 46);
+    const path = ctx.createLinearGradient(0, gy - 6, 0, gy + 36);
+    path.addColorStop(0, rgbStr(rgb.path, -0.1));
+    path.addColorStop(0.3, rgbStr(rgb.path, 0.16));
+    path.addColorStop(1, P.path);
+    ctx.fillStyle = path;
+    ctx.fillRect(fx, gy - 6, fw, 42);
     ctx.fillStyle = P.pathEdge;
     ctx.fillRect(fx, gy - 8, fw, 3);
-    ctx.fillRect(fx, gy + 38, fw, 4);
+    ctx.fillStyle = rgbStr(rgb.pathEdge, -0.12);
+    ctx.fillRect(fx, gy + 36, fw, 7);
+    ctx.fillStyle = rgbStr(rgb.path, 0.35);
+    ctx.fillRect(fx, gy + 35, fw, 1.5);
 
+    // Piedras: sombra, piedra y brillo, cada capa en un solo trazo.
     const stoneOff = this.walkX % 70;
     const [s0, s1] = this.visibleRange(70, 0, 30);
+    const stones = [];
     for (let i = s0; i <= s1; i++) {
       const k = Math.floor(this.walkX / 70) + i;
-      const x = i * 70 - stoneOff + 20 * hash(k);
-      ctx.beginPath();
-      ctx.ellipse(x, gy + 8 + 22 * hash(k + 5), 8 + 4 * hash(k + 9), 3.5, 0, 0, TAU);
-      ctx.fill();
+      stones.push([i * 70 - stoneOff + 20 * hash(k), gy + 8 + 22 * hash(k + 5), 8 + 4 * hash(k + 9)]);
     }
+    const stoneLayer = (color, dx, dy, k) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      for (const [x, y, r] of stones) {
+        ctx.moveTo(x + dx + r * k, y + dy);
+        ctx.ellipse(x + dx, y + dy, r * k, 3.5 * k, 0, 0, TAU);
+      }
+      ctx.fill();
+    };
+    stoneLayer('rgba(70, 50, 25, 0.22)', 1.5, 2.5, 1);
+    stoneLayer(P.pathEdge, 0, 0, 1);
+    stoneLayer('rgba(255, 255, 255, 0.4)', -2, -1.2, 0.5);
 
     if (wRain > 0.02) {
       const off = this.walkX % 260;
@@ -860,7 +919,11 @@ export class Scene {
       ctx.arc(x + dx * s, y + dy * s + 7, r * s, 0, TAU);
     }
     ctx.fill();
-    ctx.fillStyle = this.P.cloud;
+    const g = ctx.createLinearGradient(0, y - 40 * s, 0, y + 42 * s);
+    g.addColorStop(0, this.P.cloud);
+    g.addColorStop(0.55, this.P.cloud);
+    g.addColorStop(1, this.cloudMid);
+    ctx.fillStyle = g;
     ctx.beginPath();
     for (const [dx, dy, r] of puffs) {
       ctx.moveTo(x + dx * s + r * s, y + dy * s);
@@ -869,19 +932,32 @@ export class Scene {
     ctx.fill();
   }
 
-  drawHills(ctx, base, amp, f1, f2, off, color) {
-    ctx.fillStyle = color;
-    ctx.beginPath();
+  // `key`: color de la paleta. La cima recibe más luz que la base y tiene un borde iluminado.
+  drawHills(ctx, base, amp, f1, f2, off, key) {
+    const rgb = this.Prgb[key];
     const x0 = Math.floor((this.left - 30) / 15) * 15;
     const x1 = this.right + 30;
+    const ridge = () => {
+      for (let x = x0; x <= x1 + 15; x += 15) {
+        const wx = x + off;
+        ctx.lineTo(x, base - amp * (0.6 * Math.sin(wx * f1 + 1.3) + 0.4 * Math.sin(wx * f2 + 0.4)));
+      }
+    };
+    const g = ctx.createLinearGradient(0, base - amp, 0, base + 50);
+    g.addColorStop(0, rgbStr(rgb, 0.14));
+    g.addColorStop(1, rgbStr(rgb, -0.1));
+    ctx.fillStyle = g;
+    ctx.beginPath();
     ctx.moveTo(x0, this.H);
-    for (let x = x0; x <= x1 + 15; x += 15) {
-      const wx = x + off;
-      ctx.lineTo(x, base - amp * (0.6 * Math.sin(wx * f1 + 1.3) + 0.4 * Math.sin(wx * f2 + 0.4)));
-    }
+    ridge();
     ctx.lineTo(x1 + 15, this.H);
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = rgbStr(rgb, 0.32);
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ridge();
+    ctx.stroke();
   }
 
   // Árboles y jardín se dibujan por lotes (un solo trazo por color) para que el mundo ancho
@@ -900,6 +976,9 @@ export class Scene {
       ctx.fillRect(x - 5 * s, base - 42 * s, 10 * s, 44 * s);
       (hash(k + 7) > 0.45 ? round : pines).push([x, s]);
     }
+    ctx.fillStyle = '#A07650';
+    for (const [x, s] of round.concat(pines)) ctx.fillRect(x - 5 * s, base - 42 * s, 3.5 * s, 44 * s);
+    const treeLight = rgbStr(this.Prgb.tree, 0.2);
     const snow = wSnow > 0.02 ? `rgba(255, 255, 255, ${0.95 * wSnow})` : null;
 
     ctx.fillStyle = this.P.treeDark;
@@ -920,6 +999,15 @@ export class Scene {
       ctx.arc(x + 22 * s, base - 50 * s, 22 * s, 0, TAU);
     }
     ctx.fill();
+    ctx.fillStyle = treeLight;
+    ctx.beginPath();
+    for (const [x, s] of round) {
+      ctx.moveTo(x + 6 * s, base - 76 * s);
+      ctx.arc(x - 8 * s, base - 76 * s, 14 * s, 0, TAU);
+      ctx.moveTo(x - 18 * s, base - 54 * s);
+      ctx.arc(x - 27 * s, base - 54 * s, 9 * s, 0, TAU);
+    }
+    ctx.fill();
     if (snow) {
       ctx.fillStyle = snow;
       ctx.beginPath();
@@ -931,8 +1019,9 @@ export class Scene {
     }
 
     // Pinos: tres pisos, de abajo hacia arriba, cada uno con su nieve antes del siguiente.
+    // La mitad izquierda va iluminada y la derecha en sombra.
     for (let j = 0; j < 3; j++) {
-      ctx.fillStyle = j % 2 ? this.P.tree : this.P.treeDark;
+      ctx.fillStyle = this.P.treeDark;
       ctx.beginPath();
       for (const [x, s] of pines) {
         const ty = base - 30 * s - j * 26 * s;
@@ -940,6 +1029,17 @@ export class Scene {
         ctx.moveTo(x - tw, ty);
         ctx.lineTo(x, ty - 44 * s);
         ctx.lineTo(x + tw, ty);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.fillStyle = this.P.tree;
+      ctx.beginPath();
+      for (const [x, s] of pines) {
+        const ty = base - 30 * s - j * 26 * s;
+        const tw = (40 - j * 9) * s;
+        ctx.moveTo(x - tw, ty);
+        ctx.lineTo(x, ty - 44 * s);
+        ctx.lineTo(x + 2 * s, ty);
         ctx.closePath();
       }
       ctx.fill();
@@ -955,6 +1055,62 @@ export class Scene {
           ctx.closePath();
         }
         ctx.fill();
+      }
+    }
+  }
+
+  // Cara del cartel, foto del producto y frasco recortado, preparados una sola vez. Se rehacen
+  // cuando termina de cargar alguna imagen o la fuente.
+  brandSprites() {
+    const { product: productSrc, logo: logoSrc, bottleCrop } = this.brand;
+    const product = loadImage(productSrc);
+    const logo = loadImage(logoSrc);
+    const key = `${!!product}|${!!logo}|${this.fontsReady}`;
+    if (this.sprites?.key === key) return this.sprites;
+
+    const { w, h, border, photo: photoH } = BILLBOARD;
+    const fw = w - border * 2;
+    const fh = h - border * 2;
+    const face = makeSprite(fw, fh, (c) => drawBillboardFace(c, fw, fh, this.font, logo));
+    let photo = null;
+    let bottle = null;
+    if (product) {
+      const pw = (photoH * product.naturalWidth) / product.naturalHeight;
+      photo = makeSprite(pw + SPRITE_PAD * 2, photoH + SPRITE_PAD * 2, (c, px) => {
+        c.shadowColor = 'rgba(30, 10, 40, 0.4)';
+        c.shadowBlur = 6 * px;
+        c.shadowOffsetX = 2 * px;
+        c.shadowOffsetY = 3 * px;
+        c.drawImage(product, SPRITE_PAD, SPRITE_PAD, pw, photoH);
+      });
+      if (bottleCrop) {
+        const bh = BOTTLE_STAND.bottle;
+        const bw = (bh * bottleCrop.w) / bottleCrop.h;
+        bottle = makeSprite(bw, bh, (c) =>
+          c.drawImage(product, bottleCrop.x, bottleCrop.y, bottleCrop.w, bottleCrop.h, 0, 0, bw, bh)
+        );
+      }
+    }
+    this.sprites = { key, face, photo, bottle };
+    return this.sprites;
+  }
+
+  // Carteles y frasco gigante alternados junto al camino, sobre `base`.
+  drawRoadside(ctx, base, wSnow) {
+    if (!this.brand) return;
+    const sprites = this.brandSprites();
+    const off = this.walkX * PROP_PARALLAX;
+    const [k0, k1] = this.visibleRange(PROP_SPACING, off, PROP_MARGIN);
+    for (let k = k0; k <= k1; k++) {
+      const x = k * PROP_SPACING - off + 50 * hash(k + 41);
+      if (x < this.left - PROP_MARGIN || x > this.right + PROP_MARGIN) continue;
+      const t = this.t + k * 1.7;
+      if (k & 1) {
+        drawBottleDisplay(ctx, { x, y: base, t, bottle: sprites.bottle, font: this.font, snow: wSnow });
+      } else {
+        // Muestra el canto que da al centro de la pantalla, como un objeto con grosor.
+        const side = clamp((W / 2 - x) / (W * 0.6), -1, 1);
+        drawBillboard(ctx, { x, y: base, t, face: sprites.face, photo: sprites.photo, snow: wSnow, side });
       }
     }
   }
@@ -986,6 +1142,13 @@ export class Scene {
       ctx.arc(x + r * 0.9, base - r * 0.35, r * 0.75, Math.PI, 0);
       ctx.arc(x - r * 0.9, base - r * 0.35, r * 0.7, Math.PI, 0);
       ctx.closePath();
+    }
+    ctx.fill();
+    ctx.fillStyle = rgbStr(this.Prgb.bush, 0.22);
+    ctx.beginPath();
+    for (const [x, r] of bushes) {
+      ctx.moveTo(x - r * 0.2 + r * 0.38, base - r * 1.05);
+      ctx.arc(x - r * 0.2, base - r * 1.05, r * 0.38, 0, TAU);
     }
     ctx.fill();
     if (wSnow > 0.02) {
@@ -1112,10 +1275,20 @@ export class Scene {
     };
 
     if (bloom > 0.05) {
-      ring(16, R - 20, 26, 13, COLORS.pinkPale, null, -this.shieldRot * 1.3 + 0.2, Math.min(1, bloom) * open);
+      const pale = petalGradient(ctx, 26, [
+        [0, '#FFB3D1'],
+        [1, '#FFF2F7'],
+      ]);
+      ring(16, R - 20, 26, 13, pale, null, -this.shieldRot * 1.3 + 0.2, Math.min(1, bloom) * open);
     }
     const n = 16 + Math.round(bloom) * 4;
-    ring(n, R, 34 + bloom * 4, 15, COLORS.pink, COLORS.pinkDark, this.shieldRot, open);
+    const len = 34 + bloom * 4;
+    const pink = petalGradient(ctx, len, [
+      [0, '#C2185B'],
+      [0.5, COLORS.pink],
+      [1, '#FF9CC2'],
+    ]);
+    ring(n, R, len, 15, pink, COLORS.pinkDark, this.shieldRot, open);
 
     if (bloom > 1.05) {
       ctx.fillStyle = COLORS.gold;
@@ -1330,7 +1503,10 @@ export class Scene {
   drawForeground(ctx) {
     const base = this.H;
     const off = (this.walkX * 1.25) % 34;
-    ctx.fillStyle = this.P.grassDark;
+    const g = ctx.createLinearGradient(0, base - 50, 0, base);
+    g.addColorStop(0, rgbStr(this.Prgb.grass, 0.12));
+    g.addColorStop(1, this.P.grassDark);
+    ctx.fillStyle = g;
     ctx.beginPath();
     const [g0, g1] = this.visibleRange(34, 0, 20);
     for (let i = g0; i <= g1; i++) {

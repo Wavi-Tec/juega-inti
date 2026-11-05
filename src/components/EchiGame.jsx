@@ -44,6 +44,13 @@ const serverTrue = () => true;
 const productSrc = PRODUCTO.imagenFrasco?.src ?? null;
 const drawFinaleArt = (ctx, w, h, t, font) => drawFinale(ctx, w, h, t, font, productSrc);
 
+// Carteles y frasco gigante junto al camino.
+const brandArt = {
+  product: productSrc,
+  logo: PRODUCTO.logoDistribuidor?.src ?? null,
+  bottleCrop: productSrc ? PRODUCTO.recorteFrasco : null,
+};
+
 export default function EchiGame() {
   const stageRef = useRef(null);
   const canvasRef = useRef(null);
@@ -78,11 +85,13 @@ export default function EchiGame() {
     const font = getComputedStyle(stage).getPropertyValue('--font-display').trim() || 'sans-serif';
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const game = new Game();
-    const scene = new Scene(canvas, { font, reducedMotion });
+    const scene = new Scene(canvas, { font, reducedMotion, brand: brandArt });
     gameRef.current = game;
     sceneRef.current = scene;
     sound.setEnabled(getSoundOn());
-    loadImage(productSrc); // se precarga para que esté lista al final de la partida
+    // Se precargan para los carteles del camino y la escena final.
+    loadImage(productSrc);
+    loadImage(brandArt.logo);
 
     // Solo para pruebas: /?debug expone el estado en window.__echi
     if (new URLSearchParams(window.location.search).has('debug')) {
