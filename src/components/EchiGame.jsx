@@ -4,13 +4,13 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import Image from 'next/image';
 import { Game } from '@/game/engine';
 import { Scene } from '@/game/scene';
+import { loadCharacters3D } from '@/game/models3d';
 import { sound } from '@/game/audio';
 import { drawFinale, loadImage } from '@/game/art';
 import { GAME_DURATION, PHASES, CREATURE_TYPES } from '@/game/config';
 import { subscribe, getRecord, getSoundOn, saveRecord, saveSoundOn } from '@/game/storage';
 import { MENSAJES_CLIMA, FRASE_PRESENTADOR, AVISO_FANTASIA_CORTO, PRODUCTO } from '@/content/producto';
 import ArtCanvas from './ArtCanvas';
-import ProductPanel from './ProductPanel';
 import {
   PlayIcon,
   PauseIcon,
@@ -40,9 +40,13 @@ const vibrate = (ms) => {
 const serverFalse = () => 0;
 const serverTrue = () => true;
 
+// Personajes 3D: se cargan al montar el juego; mientras tanto (o si el equipo no tiene WebGL) se
+// usan los dibujos 2D.
+let characters3D = null;
+
 // Escena final con la foto real del producto entre Echi y la persona.
 const productSrc = PRODUCTO.imagenFrasco?.src ?? null;
-const drawFinaleArt = (ctx, w, h, t, font) => drawFinale(ctx, w, h, t, font, productSrc);
+const drawFinaleArt = (ctx, w, h, t, font) => drawFinale(ctx, w, h, t, font, productSrc, characters3D);
 
 // Carteles y frasco gigante junto al camino.
 const brandArt = {
@@ -68,7 +72,6 @@ export default function EchiGame() {
   const [toast, setToast] = useState(null);
   const [rush, setRush] = useState(false);
   const [result, setResult] = useState(null);
-  const [showProduct, setShowProduct] = useState(false);
 
   const record = useSyncExternalStore(subscribe, getRecord, serverFalse);
   const soundOn = useSyncExternalStore(subscribe, getSoundOn, serverTrue);
@@ -92,6 +95,26 @@ export default function EchiGame() {
     // Se precargan para los carteles del camino y la escena final.
     loadImage(productSrc);
     loadImage(brandArt.logo);
+
+    // Personajes 3D. Si tardan demasiado, se muestran los 2D mientras tanto.
+    let alive = true;
+    scene.models = characters3D;
+    scene.modelsPending = !characters3D;
+    const pendingTimer = setTimeout(() => {
+      scene.modelsPending = false;
+    }, 5000);
+    if (!characters3D) {
+      loadCharacters3D().then((models) => {
+        clearTimeout(pendingTimer);
+        if (!alive) {
+          models?.dispose();
+          return;
+        }
+        characters3D = models;
+        scene.models = models;
+        scene.modelsPending = false;
+      });
+    }
 
     // Solo para pruebas: /?debug expone el estado en window.__echi
     if (new URLSearchParams(window.location.search).has('debug')) {
@@ -200,18 +223,32 @@ export default function EchiGame() {
     let raf = 0;
     let last = performance.now();
     let slowFrames = 0;
+    let fastFrames = 0;
+    let recoveries = 0;
     const frame = (now) => {
       const rawDt = (now - last) / 1000;
       const dt = Math.min(0.05, rawDt);
       last = now;
       const m = modeRef.current;
 
-      // Calidad adaptativa: si el equipo no sostiene ~40 fps, baja la resolución interna del lienzo.
-      if (rawDt > 1 / 40 && rawDt < 0.5) slowFrames += 1;
-      else slowFrames = Math.max(0, slowFrames - 2);
-      if (slowFrames > 90 && scene.quality > 0.55) {
-        scene.quality *= 0.8;
+      // Calidad adaptativa: si el equipo no sostiene ~40 fps, baja un poco la resolución interna del
+      // lienzo, nunca de 75 % para que no se vea borroso. Si después vuelve a ir fluido (10 s
+      // seguidos), la recupera; como mucho dos veces, para no alternar sin parar.
+      if (rawDt > 1 / 40 && rawDt < 0.5) {
+        slowFrames += 1;
+        fastFrames = 0;
+      } else {
+        slowFrames = Math.max(0, slowFrames - 2);
+        fastFrames += 1;
+      }
+      if (slowFrames > 90 && scene.quality > 0.76) {
+        scene.quality = Math.max(0.75, scene.quality * 0.88);
         slowFrames = 0;
+        fit();
+      } else if (fastFrames > 600 && scene.quality < 1 && recoveries < 2) {
+        scene.quality = Math.min(1, scene.quality / 0.88);
+        fastFrames = 0;
+        recoveries += 1;
         fit();
       }
 
@@ -256,6 +293,8 @@ export default function EchiGame() {
     raf = requestAnimationFrame(frame);
 
     return () => {
+      alive = false;
+      clearTimeout(pendingTimer);
       cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener('resize', fit);
@@ -289,7 +328,6 @@ export default function EchiGame() {
     setRush(false);
     setResult(null);
     setCount(null);
-    setShowProduct(false);
     setMode('cuenta');
   }, [setMode]);
 
@@ -336,12 +374,6 @@ export default function EchiGame() {
     if (on && modeRef.current !== 'inicio') sound.startMusic();
     sound.ui();
   }, []);
-
-  const openProduct = useCallback(() => {
-    sound.ui();
-    setShowProduct(true);
-  }, []);
-  const closeProduct = useCallback(() => setShowProduct(false), []);
 
   const onCanvasPointer = useCallback(
     (e) => {
@@ -404,7 +436,7 @@ export default function EchiGame() {
   const mensaje = toast ? MENSAJES_CLIMA[toast.index] : null;
 
   return (
-    <main className={`app ${mode === 'pausa' ? 'dim-pausa' : ''} ${showProduct ? 'dim-producto' : ''}`}>
+    <main className={`app ${mode === 'pausa' ? 'dim-pausa' : ''}`}>
       <canvas
         ref={canvasRef}
         className="world-canvas"
@@ -562,9 +594,6 @@ export default function EchiGame() {
               </div>
             </div>
             <div className="start-footer">
-              <button className="btn btn-secondary btn-sm" onClick={openProduct}>
-                Conoce el producto
-              </button>
               <p className="presenter-note">
                 <strong>Para quien presenta:</strong> «{FRASE_PRESENTADOR}».
               </p>
@@ -639,16 +668,11 @@ export default function EchiGame() {
                 <button className="btn btn-primary btn-xl" onClick={startGame}>
                   Jugar otra vez
                 </button>
-                <button className="btn btn-secondary" onClick={openProduct}>
-                  Conoce el producto
-                </button>
               </div>
               <p className="fineprint">{AVISO_FANTASIA_CORTO}</p>
             </div>
           </section>
         )}
-
-        {showProduct && <ProductPanel onClose={closeProduct} />}
       </div>
 
       <div className="rotate-hint">

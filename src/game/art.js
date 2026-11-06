@@ -533,7 +533,8 @@ const COAT_DARK = ['#1F7443', '#1F7443', '#C99520', '#2A5C9C'].map(hexToRgb);
 
 /**
  * opciones: x, y (suelo), t, walk (fase), walking (0..1), expr ('idle'|'happy'|'oops'|'cheer'),
- * weights [sol, nublado, lluvia, nieve], scale, blink, wave (0..1)
+ * weights [sol, nublado, lluvia, nieve], scale, blink, wave (0..1),
+ * bottle: sprite { img, w, h } del frasco que lleva en la mano de delante, o null
  */
 export function drawPerson(ctx, o) {
   const {
@@ -547,6 +548,7 @@ export function drawPerson(ctx, o) {
     scale = 1,
     blink = false,
     wave = 0,
+    bottle = null,
   } = o;
   const rain = weights[2] || 0;
   const snow = weights[3] || 0;
@@ -576,7 +578,8 @@ export function drawPerson(ctx, o) {
 
   // Ángulo de brazo medido desde "colgando hacia abajo"; π = arriba.
   let backArm = sw * 0.6;
-  let frontArm = -sw * 0.6;
+  // Con el frasco, el brazo va hacia adelante (fuera del cuerpo) para que se vea, y se balancea menos.
+  let frontArm = bottle ? 0.5 - sw * 0.22 : -sw * 0.6;
   // Los brazos levantados van hacia los lados para no tapar la cara.
   if (cheer) {
     backArm = Math.PI + 0.9 + Math.sin(t * 8) * 0.12;
@@ -861,10 +864,38 @@ export function drawPerson(ctx, o) {
 
   // Brazo de delante
   const [fhx, fhy] = limb(shoulder.x + 6, shoulder.y, frontArm, 42, 13, coat, coatLight);
+  if (bottle) {
+    // Frasco tomado por la parte de abajo, para que la etiqueta quede a la vista
+    ctx.save();
+    ctx.translate(fhx, fhy);
+    ctx.rotate(Math.sin(frontArm) * 0.15);
+    ctx.drawImage(bottle.img, -bottle.w / 2, -bottle.h * 0.72, bottle.w, bottle.h);
+    // Destello cada pocos segundos
+    const k = (t % 3.5) / 0.7;
+    if (k < 1) {
+      ctx.globalAlpha = Math.sin(k * Math.PI);
+      ctx.fillStyle = '#FFFFFF';
+      drawSparkle(ctx, bottle.w * 0.35, -bottle.h * 0.62, 7, k * 2);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
   ctx.fillStyle = SKIN;
   ctx.beginPath();
   ctx.arc(fhx, fhy, 7.5, 0, TAU);
   ctx.fill();
+  if (bottle) {
+    // Dedos que rodean el frasco
+    ctx.strokeStyle = SKIN_LINE;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(fhx, fhy, 7.5, -0.5, 1.3);
+    ctx.moveTo(fhx + 1.5, fhy - 2.2);
+    ctx.lineTo(fhx + 6.5, fhy - 2.2);
+    ctx.moveTo(fhx + 1.5, fhy + 1.8);
+    ctx.lineTo(fhx + 6.5, fhy + 1.8);
+    ctx.stroke();
+  }
 
   ctx.restore();
 }
@@ -1673,8 +1704,9 @@ export function loadImage(src) {
 /**
  * Composición pensada para un lienzo lógico de 340 × 250.
  * `productSrc`: URL de la foto real del producto; sin ella se dibuja el frasco ilustrado.
+ * `models`: personajes 3D (models3d.js); sin ellos se dibujan los personajes 2D.
  */
-export function drawFinale(ctx, w, h, t, font, productSrc = null) {
+export function drawFinale(ctx, w, h, t, font, productSrc = null, models = null) {
   const sky = ctx.createLinearGradient(0, 0, 0, h);
   sky.addColorStop(0, '#9ED8F5');
   sky.addColorStop(1, '#F2FAF4');
@@ -1709,32 +1741,59 @@ export function drawFinale(ctx, w, h, t, font, productSrc = null) {
   const ground = h - 12;
   // Con la foto del producto, el frasco y la caja son lo más grande y los personajes lo
   // acompañan a los costados.
-  drawPerson(ctx, {
-    x: productSrc ? w * 0.15 : w * 0.24,
-    y: ground,
-    t,
-    walk: 0,
-    walking: 0,
-    expr: 'happy',
-    weights: [1, 0, 0, 0],
-    scale: productSrc ? 0.76 : 0.82,
-    wave: 1,
-  });
-  drawEchi(ctx, {
-    x: productSrc ? w * 0.865 : w * 0.78,
-    y: ground,
-    t,
-    hop: Math.abs(Math.sin(t * 3)) * 6,
-    expr: 'happy',
-    bloom: 1,
-    scale: productSrc ? 0.78 : 0.88,
-    wave: 1,
-    arms: 0.2,
-  });
+  if (models?.ready) {
+    // Personajes 3D girados hacia el producto, saltando de alegría.
+    const px = productSrc ? w * 0.15 : w * 0.24;
+    const ex = productSrc ? w * 0.84 : w * 0.78;
+    const pLift = Math.abs(Math.sin(t * 4)) * 0.05;
+    const eLift = Math.abs(Math.sin(t * 3 + 1)) * 0.07;
+    softShadow(ctx, px + 4, ground + 2, 30, 6.5, 0.28);
+    models.draw(ctx, 'persona', {
+      x: px,
+      y: ground,
+      height: productSrc ? 150 : 165,
+      turn: 0.45 + Math.sin(t * 3) * 0.2,
+      tilt: Math.sin(t * 9) * 0.06,
+      lift: pLift,
+    });
+    softShadow(ctx, ex + 3, ground + 2, 34, 6.5, 0.28);
+    models.draw(ctx, 'echi', {
+      x: ex,
+      y: ground,
+      height: productSrc ? 96 : 115,
+      turn: -0.45,
+      tilt: Math.sin(t * 6) * 0.06,
+      lift: eLift,
+      leaf: 0.5 + 0.3 * Math.sin(t * 12),
+    });
+  } else {
+    drawPerson(ctx, {
+      x: productSrc ? w * 0.15 : w * 0.24,
+      y: ground,
+      t,
+      walk: 0,
+      walking: 0,
+      expr: 'happy',
+      weights: [1, 0, 0, 0],
+      scale: productSrc ? 0.76 : 0.82,
+      wave: 1,
+    });
+    drawEchi(ctx, {
+      x: productSrc ? w * 0.865 : w * 0.78,
+      y: ground,
+      t,
+      hop: Math.abs(Math.sin(t * 3)) * 6,
+      expr: 'happy',
+      bloom: 1,
+      scale: productSrc ? 0.78 : 0.88,
+      wave: 1,
+      arms: 0.2,
+    });
+  }
   if (productSrc) {
     const img = loadImage(productSrc);
     if (img) {
-      const ph = h * 0.84;
+      const ph = h * (models?.ready ? 0.8 : 0.84);
       const pw = (ph * img.naturalWidth) / img.naturalHeight;
       const bob = Math.sin(t * 2) * 2;
       ctx.fillStyle = 'rgba(30, 50, 30, 0.2)';

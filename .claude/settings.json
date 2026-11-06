@@ -3,7 +3,13 @@
     "allow": [
       "PowerShell($sp = \"C:\\\\Users\\\\Daniel\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Daniel-Desktop-INTIJUEGA-echi-game\\\\799c9782-d27d-462e-8a97-8bc66ff6a356\\\\scratchpad\\\\pw\"; for \\($i = 0; $i -lt 30; $i++\\) { try { if \\(\\(Invoke-WebRequest -UseBasicParsing http://localhost:3210/ -TimeoutSec 2\\).StatusCode -eq 200\\) { break } } catch { } ; Start-Sleep -Milliseconds 500 }; node \"$sp\\\\resultado.mjs\")",
       "PowerShell($sp = \"C:\\\\Users\\\\Daniel\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Daniel-Desktop-INTIJUEGA-echi-game\\\\799c9782-d27d-462e-8a97-8bc66ff6a356\\\\scratchpad\\\\pw\"; node \"$sp\\\\resultado.mjs\")",
-      "PowerShell($sp = \"C:\\\\Users\\\\Daniel\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Daniel-Desktop-INTIJUEGA-echi-game\\\\799c9782-d27d-462e-8a97-8bc66ff6a356\\\\scratchpad\\\\pw\"; $f = \"$sp\\\\resultado.mjs\"; \\(Get-Content $f -Raw -Encoding utf8\\).Replace\\(\"{ timeout: 10000 }\\).catch\", \"{ timeout: 30000 }\\).catch\"\\) | Set-Content -NoNewline -Encoding utf8 $f; node $f)"
+      "PowerShell($sp = \"C:\\\\Users\\\\Daniel\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Daniel-Desktop-INTIJUEGA-echi-game\\\\799c9782-d27d-462e-8a97-8bc66ff6a356\\\\scratchpad\\\\pw\"; $f = \"$sp\\\\resultado.mjs\"; \\(Get-Content $f -Raw -Encoding utf8\\).Replace\\(\"{ timeout: 10000 }\\).catch\", \"{ timeout: 30000 }\\).catch\"\\) | Set-Content -NoNewline -Encoding utf8 $f; node $f)",
+      "Bash(npx eslint *)",
+      "Bash(npm test *)",
+      "Bash(node \"C:/Users/Daniel/AppData/Local/Temp/claude/c--Users-Daniel-Desktop-INTIJUEGA-echi-game/18bb8ae5-6bf9-4de8-afb0-87985656dea3/scratchpad/smoke.mjs\" \"/C:/Users/Daniel/Desktop/INTIJUEGA/echi-game\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -o /dev/null -I -L --max-time 60 -w \"final: %{url_effective}\\\\ncode: %{http_code}\\\\nredirects: %{num_redirects}\\\\nconnect: %{time_connect}s\\\\n\" https://services.gradle.org/distributions/gradle-8.14.3-all.zip)",
+      "Bash(env)"
     ]
   }
 }

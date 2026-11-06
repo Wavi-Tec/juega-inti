@@ -20,6 +20,9 @@
 # production
 /build
 
+# instalador de Android generado con `npm run apk`
+*.apk
+
 # misc
 .DS_Store
 *.pem

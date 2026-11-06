@@ -24,6 +24,7 @@ import {
   mixRgb,
   rgbStr,
   petalGradient,
+  softShadow,
   drawEchi,
   drawPerson,
   drawCreature,
@@ -92,6 +93,15 @@ function hash(n) {
 const PROP_SPACING = 520;
 const PROP_PARALLAX = 0.75;
 const PROP_MARGIN = 150;
+// Alto del frasco que lleva la persona en la mano.
+const HAND_BOTTLE = 72;
+
+// Personajes 3D (models3d.js): alto en unidades lógicas y hacia dónde miran (giro en radianes;
+// positivo = hacia la derecha, hacia donde caminan).
+const PERSON_3D_H = 190;
+const ECHI_3D_H = 160;
+const PERSON_TURN = 0.7;
+const ECHI_TURN = 0.3;
 
 const MAX_PARTICLES = 420;
 // Cantidades para una columna (W); en pantallas anchas se usan más, hasta estos máximos.
@@ -175,8 +185,8 @@ export class Scene {
     this.rushT = -1;
     this.lastMissText = -9;
     this.combo = { value: 0, shown: 0, pop: 0 };
-    this.echi = { expr: null, exprT: 0, tapAge: 9, blinkT: 2.2, blink: 0, look: 0, wave: 0 };
-    this.person = { expr: null, exprT: 0, blinkT: 3.4, blink: 0 };
+    this.echi = { expr: null, exprT: 0, tapAge: 9, blinkT: 2.2, blink: 0, look: 0, wave: 0, turn: ECHI_TURN };
+    this.person = { expr: null, exprT: 0, blinkT: 3.4, blink: 0, turn: PERSON_TURN, wave: 0 };
   }
 
   /**
@@ -604,6 +614,8 @@ export class Scene {
     e.look += (lookTarget - e.look) * Math.min(1, dt * 8);
     const waving = mode === 'inicio' && Math.sin(this.t * 0.9) > 0.55;
     e.wave += ((waving || mode === 'resultado' ? 1 : 0) - e.wave) * Math.min(1, dt * 5);
+    // Echi 3D se gira hacia la criatura más cercana.
+    e.turn += (ECHI_TURN + e.look * 0.45 - e.turn) * Math.min(1, dt * 6);
 
     const pr = this.person;
     if (pr.exprT > 0) {
@@ -616,6 +628,11 @@ export class Scene {
       pr.blinkT = 2.5 + Math.random() * 3;
     }
     pr.blink = Math.max(0, pr.blink - dt);
+    // La persona 3D mira hacia donde camina; al saludar o celebrar se gira hacia la cámara.
+    const prWaving = mode === 'inicio' && Math.sin(this.t * 0.9 + 2) > 0.7;
+    const prTurn = prWaving ? 0.15 : pr.expr === 'cheer' || mode === 'resultado' ? 0.3 : PERSON_TURN;
+    pr.turn += (prTurn - pr.turn) * Math.min(1, dt * 6);
+    pr.wave += ((prWaving ? 1 : 0) - pr.wave) * Math.min(1, dt * 6);
 
     // Partículas
     for (const p of this.particles) {
@@ -1074,6 +1091,7 @@ export class Scene {
     const face = makeSprite(fw, fh, (c) => drawBillboardFace(c, fw, fh, this.font, logo));
     let photo = null;
     let bottle = null;
+    let handBottle = null;
     if (product) {
       const pw = (photoH * product.naturalWidth) / product.naturalHeight;
       photo = makeSprite(pw + SPRITE_PAD * 2, photoH + SPRITE_PAD * 2, (c, px) => {
@@ -1084,14 +1102,17 @@ export class Scene {
         c.drawImage(product, SPRITE_PAD, SPRITE_PAD, pw, photoH);
       });
       if (bottleCrop) {
-        const bh = BOTTLE_STAND.bottle;
-        const bw = (bh * bottleCrop.w) / bottleCrop.h;
-        bottle = makeSprite(bw, bh, (c) =>
-          c.drawImage(product, bottleCrop.x, bottleCrop.y, bottleCrop.w, bottleCrop.h, 0, 0, bw, bh)
-        );
+        const crop = (bh) => {
+          const bw = (bh * bottleCrop.w) / bottleCrop.h;
+          return makeSprite(bw, bh, (c) =>
+            c.drawImage(product, bottleCrop.x, bottleCrop.y, bottleCrop.w, bottleCrop.h, 0, 0, bw, bh)
+          );
+        };
+        bottle = crop(BOTTLE_STAND.bottle);
+        handBottle = crop(HAND_BOTTLE);
       }
     }
-    this.sprites = { key, face, photo, bottle };
+    this.sprites = { key, face, photo, bottle, handBottle };
     return this.sprites;
   }
 
@@ -1316,6 +1337,18 @@ export class Scene {
     const pr = this.person;
     const tap = e.tapAge;
     const squash = tap < 0.6 ? Math.exp(-tap * 7) * Math.cos(tap * 22) : 0;
+    const personExpr = pr.expr || (mode === 'resultado' ? 'happy' : 'idle');
+    const echiExpr = e.expr || (zone ? 'alert' : 'idle');
+    const glow = zone && this.shieldOpen < 0.5 ? 0.65 + 0.35 * Math.sin(this.t * 14) : 0;
+    const bottle = this.brand ? this.brandSprites().handBottle : null;
+
+    if (this.models?.ready) {
+      this.drawPerson3D(ctx, personExpr, bottle);
+      this.drawEchi3D(ctx, echiExpr, squash, glow);
+      return;
+    }
+    // Mientras cargan los modelos 3D no se dibujan, para no ver el cambio de 2D a 3D.
+    if (this.modelsPending) return;
 
     drawPerson(ctx, {
       x: this.personPos.x,
@@ -1323,10 +1356,11 @@ export class Scene {
       t: this.t,
       walk: this.walkPhase,
       walking: this.walking,
-      expr: pr.expr || (mode === 'resultado' ? 'happy' : 'idle'),
+      expr: personExpr,
       weights: this.weights,
       blink: pr.blink > 0,
       wave: mode === 'inicio' && Math.sin(this.t * 0.9 + 2) > 0.7 ? 1 : 0,
+      bottle,
     });
 
     drawEchi(ctx, {
@@ -1336,14 +1370,173 @@ export class Scene {
       t: this.t,
       walk: this.walkPhase,
       hop: this.echiHop(),
-      expr: e.expr || (zone ? 'alert' : 'idle'),
+      expr: echiExpr,
       look: e.look,
       bloom: this.bloomVis,
       arms: this.shieldOpen,
       squash,
-      glow: zone && this.shieldOpen < 0.5 ? 0.65 + 0.35 * Math.sin(this.t * 14) : 0,
+      glow,
       blink: e.blink > 0,
       wave: e.wave,
+    });
+  }
+
+  // Luz de los personajes 3D según el clima: más tenue y fría con lluvia o nieve.
+  light3D() {
+    const [, wCloud, wRain, wSnow] = this.weights;
+    return {
+      light: 1 - 0.15 * wCloud - 0.35 * wRain - 0.05 * wSnow,
+      cool: 0.25 * wCloud + 0.8 * wRain + 0.6 * wSnow,
+    };
+  }
+
+  // Persona 3D: camina moviendo piernas y brazos (models3d.js), rebota en cada paso y se viste
+  // según el clima. Las expresiones se muestran con el cuerpo: saltitos de alegría, echarse atrás
+  // del susto y saltar girando al celebrar.
+  drawPerson3D(ctx, expr, bottle) {
+    const { x, y } = this.personPos;
+    const t = this.t;
+    const pr = this.person;
+    const w = this.walking;
+    // El cuerpo sube cuando las piernas se cruzan y baja cuando están abiertas: dos rebotes por ciclo.
+    let lift = Math.abs(Math.cos(this.walkPhase)) * 0.018 * w;
+    let tilt = Math.sin(this.walkPhase) * 0.035 * w;
+    let lean = 0.04 * w;
+    let turn = pr.turn;
+    if (expr === 'happy') lift += Math.abs(Math.sin(t * 9)) * 0.04;
+    else if (expr === 'cheer') {
+      lift += Math.abs(Math.sin(t * 7)) * 0.1;
+      turn += Math.sin(t * 3.5) * 0.35;
+    } else if (expr === 'oops') {
+      lean = -0.2;
+      tilt = Math.sin(t * 38) * 0.05;
+    }
+    tilt += Math.sin(t * 9) * 0.08 * pr.wave;
+    lift += Math.abs(Math.sin(t * 9)) * 0.025 * pr.wave;
+
+    softShadow(ctx, x + 6, y + 2, 38 * (1 - lift * 2), 8.5, 0.32);
+    const res = this.models.draw(ctx, 'persona', {
+      x,
+      y,
+      height: PERSON_3D_H,
+      turn,
+      tilt,
+      lean,
+      lift,
+      phase: this.walkPhase,
+      stride: w,
+      rain: this.weights[2],
+      snow: this.weights[3],
+      ...this.light3D(),
+    });
+    if (bottle && res) this.drawHandBottle(ctx, res.hand, bottle, tilt);
+  }
+
+  // Frasco en la mano de la persona 3D, tomado por el costado y abajo para que la etiqueta con el
+  // nombre quede a la vista; los dedos asoman por el borde.
+  drawHandBottle(ctx, hand, bottle, tilt) {
+    ctx.save();
+    ctx.translate(hand.x, hand.y);
+    ctx.rotate(0.06 + tilt * 0.5);
+    ctx.drawImage(bottle.img, -bottle.w * 0.15, -bottle.h * 0.8, bottle.w, bottle.h);
+    const k = (this.t % 3.5) / 0.7;
+    if (k < 1) {
+      ctx.globalAlpha = Math.sin(k * Math.PI);
+      ctx.fillStyle = '#FFFFFF';
+      drawSparkle(ctx, bottle.w * 0.7, -bottle.h * 0.7, 7, k * 2);
+      ctx.globalAlpha = 1;
+    }
+    const skin = ctx.createRadialGradient(-1.5, -2, 0.5, 0, 0, 6.5);
+    skin.addColorStop(0, '#FFE6D8');
+    skin.addColorStop(1, '#EBB49A');
+    ctx.fillStyle = skin;
+    ctx.strokeStyle = 'rgba(170, 100, 75, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 5, 6.5, 0.15, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Echi 3D: da pasitos y salta al caminar aleteando sus hojas, se aplasta al tocarlo, levanta las
+  // hojas al lanzar el escudo y salta de alegría. El brillo de «¡ahora!» y la flor de racha se
+  // dibujan detrás, en 2D.
+  drawEchi3D(ctx, expr, squash, glow) {
+    const { x, y } = this.echiPos;
+    const t = this.t;
+    const e = this.echi;
+    const s = this.echiScale();
+    let lift = this.echiHop() / ECHI_3D_H;
+    let sx = 1 + squash * 0.16;
+    let sy = 1 - squash * 0.14;
+    let tilt = Math.sin(this.walkPhase) * 0.05 * this.walking;
+    let lean = 0;
+    let turn = e.turn;
+    // Aleteo: suave al caminar, arriba con el escudo abierto, rápido al celebrar.
+    let leaf = 0.08 + 0.14 * Math.sin(this.walkPhase * 2) * this.walking;
+    if (expr === 'cast') {
+      sy *= 1.07;
+      sx *= 0.96;
+    } else if (expr === 'happy') {
+      lift += Math.abs(Math.sin(t * 10)) * 0.05;
+      leaf = 0.35 + 0.15 * Math.sin(t * 12);
+    } else if (expr === 'cheer') {
+      lift += Math.abs(Math.sin(t * 7)) * 0.1;
+      turn += Math.sin(t * 5) * 0.5;
+      leaf = 0.55 + 0.3 * Math.sin(t * 14);
+    } else if (expr === 'worried') {
+      tilt += Math.sin(t * 30) * 0.06;
+      leaf = -0.15 + 0.05 * Math.sin(t * 30);
+    } else if (expr === 'alert') {
+      lean = 0.08;
+      leaf = 0.3;
+    }
+    leaf = lerp(leaf, 0.95, this.shieldOpen) + 0.25 * e.wave * (0.5 + 0.5 * Math.sin(t * 10));
+    tilt += Math.sin(t * 10) * 0.08 * e.wave;
+
+    const head = this.echiHead();
+    if (glow > 0) {
+      const g = ctx.createRadialGradient(head.x, head.y, 20, head.x, head.y, 110);
+      g.addColorStop(0, `rgba(255, 220, 90, ${0.55 * glow})`);
+      g.addColorStop(1, 'rgba(255, 220, 90, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, 110, 0, TAU);
+      ctx.fill();
+    }
+    if (this.bloomVis > 0.02) {
+      // Flor de racha: un anillo de pétalos que gira detrás de la cabeza.
+      ctx.save();
+      ctx.translate(head.x, head.y);
+      ctx.rotate(t * 0.4);
+      ctx.globalAlpha = Math.min(1, this.bloomVis);
+      const len = 30 + Math.min(this.bloomVis, 3) * 6;
+      for (let i = 0; i < 16; i++) {
+        ctx.save();
+        ctx.rotate((i / 16) * TAU);
+        ctx.translate(0, -62 * s);
+        drawPetal(ctx, len, 16, COLORS.pinkLight, null, null);
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    softShadow(ctx, x + 4, y + 1, 44 * s * (1 - lift * 2), 8.5, 0.3);
+    this.models.draw(ctx, 'echi', {
+      x,
+      y,
+      height: ECHI_3D_H * s,
+      turn,
+      tilt,
+      lean,
+      lift,
+      sx,
+      sy,
+      phase: this.walkPhase,
+      stride: this.walking,
+      leaf,
+      ...this.light3D(),
     });
   }
 

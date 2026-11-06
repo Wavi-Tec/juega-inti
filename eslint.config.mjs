@@ -10,6 +10,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Proyecto Android de Capacitor (incluye una copia compilada del juego).
+    "android/**",
   ]),
 ]);
 

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fondo celeste de la pantalla de carga -->
+    <color name="splash_background">#CDEBF7</color>
+</resources>

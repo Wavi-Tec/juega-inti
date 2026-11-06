@@ -1,8 +1,20 @@
-import { Baloo_2, Nunito } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 
-const display = Baloo_2({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
-const body = Nunito({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
+// Baloo 2 y Nunito (Google Fonts, licencia SIL Open Font License), solo con el alfabeto latino
+// (incluye tildes, ñ, ¡ y ¿): así el juego no carga los otros alfabetos y pesa menos.
+const display = localFont({
+  src: '../assets/fonts/baloo2-latin.woff2',
+  weight: '400 800',
+  variable: '--font-display',
+  display: 'swap',
+});
+const body = localFont({
+  src: '../assets/fonts/nunito-latin.woff2',
+  weight: '200 1000',
+  variable: '--font-body',
+  display: 'swap',
+});
 
 export const metadata = {
   title: 'Echi te acompaña · Echinacea Médica',

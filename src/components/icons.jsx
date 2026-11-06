@@ -46,14 +46,6 @@ export function SoundOffIcon() {
   );
 }
 
-export function CloseIcon() {
-  return (
-    <svg {...base}>
-      <path d="M6 6l12 12M18 6L6 18" />
-    </svg>
-  );
-}
-
 export function FlowerIcon() {
   const petals = Array.from({ length: 10 }, (_, i) => i * 36);
   return (
