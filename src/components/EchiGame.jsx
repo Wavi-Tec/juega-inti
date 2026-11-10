@@ -7,9 +7,9 @@ import { Scene } from '@/game/scene';
 import { loadCharacters3D } from '@/game/models3d';
 import { sound } from '@/game/audio';
 import { drawFinale, loadImage } from '@/game/art';
-import { GAME_DURATION, PHASES, CREATURE_TYPES } from '@/game/config';
+import { GAME_DURATION, PHASES, CREATURE_TYPES, SHIELD } from '@/game/config';
 import { subscribe, getRecord, getSoundOn, saveRecord, saveSoundOn } from '@/game/storage';
-import { MENSAJES_CLIMA, FRASE_PRESENTADOR, AVISO_FANTASIA_CORTO, PRODUCTO } from '@/content/producto';
+import { MENSAJES_CLIMA, FRASE_PRESENTADOR, AVISO_FANTASIA_CORTO, PRODUCTO, DESARROLLADOR } from '@/content/producto';
 import ArtCanvas from './ArtCanvas';
 import {
   PlayIcon,
@@ -17,6 +17,7 @@ import {
   SoundOnIcon,
   SoundOffIcon,
   FlowerIcon,
+  LinkedInIcon,
   CreatureIcon,
   RingIcon,
   PetalShieldIcon,
@@ -26,6 +27,10 @@ const COUNTDOWN = 3; // segundos antes de empezar
 const FINAL_DELAY = 1.9; // celebración antes de mostrar el resultado
 const TOAST_TIME = 5.5; // segundos visibles del mensaje de cada clima
 const EMPTY_HUD = { score: 0, streak: 0, secondsLeft: GAME_DURATION, phase: 0 };
+// Pausa de impacto: en los grandes golpes la partida se congela un instante (segundos).
+const FREEZE = { perfect: 0.045, golden: 0.07, group: 0.08 };
+// Cada ajuste de la calidad adaptativa cambia la resolución en este factor.
+const QUALITY_STEP = 0.85;
 
 // Modos: 'inicio' | 'cuenta' | 'partida' | 'pausa' | 'final' | 'resultado'
 
@@ -64,7 +69,18 @@ export default function EchiGame() {
   const sceneRef = useRef(null);
   const modeRef = useRef('inicio');
   const pausedFromRef = useRef('partida');
-  const loopRef = useRef({ countdown: 0, count: null, goUntil: 0, toastUntil: 0, finalT: 0, summary: null, hud: EMPTY_HUD });
+  const loopRef = useRef({
+    countdown: 0,
+    count: null,
+    goUntil: 0,
+    toastUntil: 0,
+    finalT: 0,
+    summary: null,
+    hud: EMPTY_HUD,
+    freeze: 0,
+    record: 0,
+    recordBeaten: false,
+  });
 
   const [mode, setModeState] = useState('inicio');
   const [hud, setHud] = useState(EMPTY_HUD);
@@ -150,13 +166,24 @@ export default function EchiGame() {
         } else if (e.type === 'shield') {
           // Los toques directos ya sonaron al tocar; aquí solo los guardados durante la recarga.
           if (e.buffered) sound.shield();
+        } else if (e.type === 'shieldEnd') {
+          if (e.whiff) sound.whiff();
         } else if (e.type === 'block') {
           sound.block(e.streak, e.perfect);
           if (e.kind === 2) sound.golden();
-          if (e.bloomUp) sound.bloom(e.bloom);
-          vibrate(12);
+          if (e.bloomUp || e.milestone) sound.bloom(e.bloom);
+          if (e.kind === 2) L.freeze = Math.max(L.freeze, FREEZE.golden);
+          else if (e.perfect) L.freeze = Math.max(L.freeze, FREEZE.perfect);
+          vibrate(e.perfect ? 20 : 12);
+          // Superar el récord anterior se celebra en el momento, no solo al final.
+          if (L.record > 0 && !L.recordBeaten && game.score > L.record) {
+            L.recordBeaten = true;
+            scene.onRecord();
+            sound.record();
+          }
         } else if (e.type === 'group') {
           sound.group(e.size);
+          L.freeze = Math.max(L.freeze, FREEZE.group);
           vibrate([15, 40, 25]);
         } else if (e.type === 'spawn') {
           if (e.creature.type === 2) sound.goldenSpawn();
@@ -209,6 +236,7 @@ export default function EchiGame() {
         btn.style.setProperty('--charge', game.shieldCharge.toFixed(3));
         btn.classList.toggle('is-now', game.anyInZone() && !game.shield.active);
         btn.classList.toggle('is-open', game.shield.active);
+        btn.classList.toggle('is-tired', game.shield.cooldown > 0 && game.shield.cooldownMax > SHIELD.cooldown);
       }
       if (L.toastUntil && game.time > L.toastUntil) {
         L.toastUntil = 0;
@@ -231,9 +259,10 @@ export default function EchiGame() {
       last = now;
       const m = modeRef.current;
 
-      // Calidad adaptativa: si el equipo no sostiene ~40 fps, baja un poco la resolución interna del
-      // lienzo, nunca de 75 % para que no se vea borroso. Si después vuelve a ir fluido (10 s
-      // seguidos), la recupera; como mucho dos veces, para no alternar sin parar.
+      // Calidad adaptativa: si el equipo no sostiene ~40 fps, baja por pasos la resolución interna
+      // del lienzo, como mucho hasta 1 píxel de lienzo por píxel de pantalla (scene.minQuality).
+      // Empieza ya en la portada, así al jugar suele estar ajustada. Si después vuelve a ir fluido
+      // (10 s seguidos), sube un paso; como mucho dos veces, para no alternar sin parar.
       if (rawDt > 1 / 40 && rawDt < 0.5) {
         slowFrames += 1;
         fastFrames = 0;
@@ -241,12 +270,12 @@ export default function EchiGame() {
         slowFrames = Math.max(0, slowFrames - 2);
         fastFrames += 1;
       }
-      if (slowFrames > 90 && scene.quality > 0.76) {
-        scene.quality = Math.max(0.75, scene.quality * 0.88);
+      if (slowFrames > 45 && scene.quality > scene.minQuality + 0.01) {
+        scene.quality = Math.max(scene.minQuality, scene.quality * QUALITY_STEP);
         slowFrames = 0;
         fit();
       } else if (fastFrames > 600 && scene.quality < 1 && recoveries < 2) {
-        scene.quality = Math.min(1, scene.quality / 0.88);
+        scene.quality = Math.min(1, scene.quality / QUALITY_STEP);
         fastFrames = 0;
         recoveries += 1;
         fit();
@@ -269,7 +298,9 @@ export default function EchiGame() {
           }
         }
       } else if (m === 'partida') {
-        const events = game.update(dt);
+        const step = L.freeze > 0 ? 0 : dt;
+        L.freeze = Math.max(0, L.freeze - dt);
+        const events = game.update(step);
         if (events.length) onEvents(events);
         syncHud();
       } else if (m === 'final') {
@@ -322,6 +353,9 @@ export default function EchiGame() {
       finalT: 0,
       summary: null,
       hud: EMPTY_HUD,
+      freeze: 0,
+      record: getRecord(),
+      recordBeaten: false,
     });
     setHud(EMPTY_HUD);
     setToast(null);
@@ -597,6 +631,16 @@ export default function EchiGame() {
               <p className="presenter-note">
                 <strong>Para quien presenta:</strong> «{FRASE_PRESENTADOR}».
               </p>
+              {/* En la app de Android, Capacitor abre los enlaces externos en el navegador del teléfono. */}
+              <a
+                className="dev-credit"
+                href={DESARROLLADOR.linkedin}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Desarrollado por ${DESARROLLADOR.nombre}: ver su perfil de LinkedIn`}
+              >
+                <LinkedInIcon /> Desarrollado por <strong>{DESARROLLADOR.nombre}</strong>
+              </a>
             </div>
           </section>
         )}

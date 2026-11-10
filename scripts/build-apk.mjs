@@ -1,9 +1,12 @@
-// Genera el instalador de Android (APK) del juego: `npm run apk`.
+// Genera la app de Android del juego:
+//   npm run apk  → echi-te-acompana.apk (para instalar directo en los celulares)
+//   npm run aab  → echi-te-acompana.aab (para subir a Play Store)
 // 1) Exporta el juego como archivos estáticos (out/).
 // 2) Los copia al proyecto Android con Capacitor.
-// 3) Compila el APK optimizado (release) con Gradle y lo deja en echi-te-acompana.apk, en la raíz
-//    del proyecto. Antes de repartir una versión nueva, sube versionCode en android/app/build.gradle.
-// El APK lleva el juego completo adentro, así que funciona sin internet.
+// 3) Compila la versión optimizada (release) con Gradle y deja el archivo en la raíz del proyecto.
+// Firma con la clave de INTI si existe android/keystore.properties; si no, con la clave de pruebas
+// de esta PC (no sirve para producción). Antes de repartir una versión nueva, sube versionCode en
+// android/app/build.gradle. La app lleva el juego completo adentro y funciona sin internet.
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const win = process.platform === 'win32';
 const env = { ...process.env };
+const bundle = process.argv.includes('--aab');
 
 // Si no está configurado, se usa la carpeta donde Android Studio instala el SDK.
 if (!env.ANDROID_HOME && !env.ANDROID_SDK_ROOT) {
@@ -32,11 +36,25 @@ function run(label, cmd, args, opts = {}) {
   }
 }
 
+const production = existsSync(join(root, 'android', 'keystore.properties'));
+
 run('Exportando el juego (out/)', 'npx', ['next', 'build'], { env: { ...env, ECHI_EXPORT: '1' } });
 run('Copiando el juego al proyecto Android', 'npx', ['cap', 'sync', 'android']);
-run('Compilando el APK', win ? '.\\gradlew.bat' : './gradlew', ['assembleRelease'], { cwd: join(root, 'android') });
+run(
+  bundle ? 'Compilando el paquete para Play Store (AAB)' : 'Compilando el APK',
+  win ? '.\\gradlew.bat' : './gradlew',
+  [bundle ? 'bundleRelease' : 'assembleRelease'],
+  { cwd: join(root, 'android') }
+);
 
-const apk = join(root, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
-const dest = join(root, 'echi-te-acompana.apk');
-copyFileSync(apk, dest);
+const out = join(root, 'android', 'app', 'build', 'outputs');
+const built = bundle ? join(out, 'bundle', 'release', 'app-release.aab') : join(out, 'apk', 'release', 'app-release.apk');
+const dest = join(root, bundle ? 'echi-te-acompana.aab' : 'echi-te-acompana.apk');
+copyFileSync(built, dest);
 console.log(`\n✔ Listo: ${dest}`);
+console.log(
+  production
+    ? '  Firmado con la clave de producción (android/keystore.properties).'
+    : '  ⚠ Firmado con la clave de PRUEBAS de esta PC: sirve para probar, no para producción ni Play Store.\n' +
+        '    Para firmar con la clave de INTI, crea android/keystore.properties (ver keystore.properties.example).'
+);

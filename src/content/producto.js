@@ -29,6 +29,12 @@ export const FRASE_PRESENTADOR = 'Mira cómo Echi acompaña al personaje durante
 // Aviso en la pantalla de resultado.
 export const AVISO_FANTASIA_CORTO = 'Juego de fantasía: no representa el efecto del producto.';
 
+// Crédito de desarrollo en la portada (abre el perfil en el navegador).
+export const DESARROLLADOR = {
+  nombre: 'Daniel Rojas',
+  linkedin: 'https://www.linkedin.com/in/daniel-rojas-dev/',
+};
+
 export const PRODUCTO = {
   nombre: 'Echinacea Médica',
   // Foto real del frasco y la caja (fondo transparente, en WebP para que pese poco). Para cambiarla,

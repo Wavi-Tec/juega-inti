@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+// Firma de producción: si existe android/keystore.properties (ver keystore.properties.example) se
+// firma con la clave de INTI. Si no, con la clave de pruebas de esta PC, que sirve para probar pero
+// no para producción ni para Play Store.
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace = "bo.com.inti.echi"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,15 +25,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (keystorePropsFile.exists()) {
+            produccion {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             // Código Android optimizado (R8) y sin recursos que no se usan: el APK pesa mucho menos.
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Firmado con la clave de pruebas de esta PC, igual que el APK anterior, para que se
-            // instale encima. Para publicar en Play Store hay que crear y usar una clave propia.
-            signingConfig signingConfigs.debug
+            signingConfig keystorePropsFile.exists() ? signingConfigs.produccion : signingConfigs.debug
         }
     }
 }

@@ -131,6 +131,10 @@ test('tocar al brillar nunca falla; la racha hace florecer el escudo', () => {
   assert.equal(blocks[2].bloomUp, true);
   assert.equal(blocks[5].bloom, 2);
   assert.equal(blocks[9].bloom, 3);
+  // Rachas de 20, 30, 40… se celebran.
+  const milestones = blocks.filter((b) => b.milestone).map((b) => b.streak);
+  assert.deepEqual(milestones.slice(0, 2), [20, 30]);
+  assert.ok(milestones.every((s) => s % 10 === 0 && s >= 20));
 });
 
 test('«¡Perfecto!» se celebra pero no cambia los puntos', () => {
@@ -278,7 +282,7 @@ test('el fallo explica la causa: «muy pronto» y «un poco tarde»', () => {
   assert.ok(late.events.some((e) => e.type === 'late'));
 });
 
-test('el escudo dura ~1 s, recarga, y guarda un toque hecho justo antes de estar listo', () => {
+test('el escudo dura poco, recarga, y guarda un toque hecho justo antes de estar listo', () => {
   const game = new Game({ rng: createRng(1) });
   assert.equal(game.activateShield(), 'inactive', 'antes de empezar no hace nada');
   game.start();
@@ -303,11 +307,47 @@ test('el escudo dura ~1 s, recarga, y guarda un toque hecho justo antes de estar
   assert.equal(opened.buffered, true);
   assert.equal(game.shield.active, true);
 
-  // Tocar en cada cuadro rinde menos que tocar a tiempo.
+  // Tocar en cada cuadro rinde mucho menos que tocar a tiempo.
   const spam = play({ onFrame: (g) => g.activateShield() }).game;
   const sharp = play({ onFrame: sharpPlayer }).game;
   assert.ok(spam.misses > 0, 'tocar sin parar deja pasar criaturas');
-  assert.ok(spam.score < sharp.score);
+  assert.ok(spam.blocks < sharp.blocks * 0.5, `sin parar ${spam.blocks} vs a tiempo ${sharp.blocks}`);
+});
+
+test('tocar «al aire» (sin bloquear nada) alarga la recarga; bloquear no', () => {
+  const game = new Game({ rng: createRng(1) });
+  game.start();
+  game.update(DT);
+  game.activateShield(); // al principio no viene ninguna criatura
+  let end = null;
+  while (!end) end = game.update(DT).find((e) => e.type === 'shieldEnd');
+  assert.equal(end.whiff, true);
+  assert.ok(Math.abs(game.shield.cooldown - SHIELD.whiffCooldown) < 2 * DT);
+  assert.ok(game.shieldCharge < 0.05, 'el botón muestra la recarga desde cero');
+  assert.equal(game.whiffs, 1);
+
+  const { events, game: g } = play({ onFrame: glowPlayer });
+  const ends = events.filter((e) => e.type === 'shieldEnd');
+  assert.ok(ends.length > 20 && ends.every((e) => !e.whiff), 'tocar al brillar nunca es «al aire»');
+  assert.equal(g.whiffs, 0);
+});
+
+test('cada bloqueo mantiene el escudo abierto para el resto del grupo', () => {
+  // Un solo toque por grupo, al brillar el primero: el grupo entero queda bloqueado.
+  const { events } = play({ seed: 3, onFrame: glowPlayer });
+  const shields = events.filter((e) => e.type === 'shield');
+  const blocks = events.filter((e) => e.type === 'block');
+  const groups = new Set(blocks.map((b) => b.creature.group));
+  assert.equal(shields.length, groups.size, 'un toque por grupo');
+  assert.ok(blocks.some((b, i) => i > 0 && b.creature.group === blocks[i - 1].creature.group));
+
+  // Tras el último bloqueo, el escudo se cierra SHIELD.extend después (si ya pasó su duración).
+  for (const end of events.filter((e) => e.type === 'shieldEnd')) {
+    const last = blocks.filter((b) => b.at <= end.at).at(-1);
+    const open = shields.filter((s) => s.at <= last.at).at(-1);
+    const expected = Math.max(open.at + SHIELD.duration, last.creature.impactAt + SHIELD.extend);
+    assert.ok(Math.abs(end.at - expected) < 2 * DT, `cierra en ${end.at.toFixed(3)}, esperado ${expected.toFixed(3)}`);
+  }
 });
 
 test('un fallo rompe la racha pero no termina la partida', () => {

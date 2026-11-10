@@ -39,14 +39,18 @@ Puntos (sin multiplicadores): cada virus bloqueado suma exactamente su valor, qu
 - Un aro se cierra sobre cada virus. Dorado (y el botón también) = ya se puede tocar y bloquea seguro;
   blanco brillante = último momento («¡Perfecto!», solo celebración). El aro siempre marca el momento
   real de llegada, aunque el virus cambie de velocidad.
-- El escudo dura 1 s y recarga en 0,35 s, así que tocar sin parar no sirve. Un toque hecho
-  en los últimos 0,2 s de la recarga se guarda y se usa en cuanto el escudo está listo.
-- La racha no da puntos extra: se ve como una flor que crece junto a la persona; Echi y el escudo
-  florecen más y la música suma una melodía.
+- El escudo dura 0,6 s y cada bloqueo lo mantiene abierto 0,3 s más, así un toque al brillar
+  bloquea el grupo entero. Recarga en 0,35 s; si se cerró sin bloquear nada («¡Espera el brillo!»),
+  tarda 0,9 s y el botón se apaga: tocar antes de tiempo o sin parar no sirve. Un toque hecho en
+  los últimos 0,2 s de la recarga se guarda y se usa en cuanto el escudo está listo.
+- La racha no da puntos extra: se ve como una flor que crece junto a la persona; el escudo florece
+  más, Echi crece apenas y la música suma una melodía. Las rachas de 20, 30, 40… se celebran.
 - Bloquear un grupo entero de un solo toque se celebra con «¡Grupo completo!».
+- Los «¡Perfecto!», los dorados y los grupos completos congelan el juego un instante (pausa de impacto).
+- Superar el récord anterior se celebra en plena partida con «¡Nuevo récord!».
 - Ráfaga final (últimos 10 s): música más rápida y marco dorado.
-- Un fallo rompe la racha y el juego dice por qué («¡Muy pronto!», «¡Toca cuando brille!»,
-  «¡Un poco tarde!»), pero la partida sigue hasta los 60 s.
+- Un fallo rompe la racha, el borde de la pantalla se tiñe de morado y el juego dice por qué
+  («¡Muy pronto!», «¡Toca cuando brille!», «¡Un poco tarde!»), pero la partida sigue hasta los 60 s.
 - Flechas en los bordes avisan de criaturas que aún están fuera de la pantalla.
 - El récord se guarda en el navegador. Pausa con el botón ‖ (o Esc / P); la partida se pausa sola si se cambia de aplicación.
 

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "apk": "node scripts/build-apk.mjs",
+    "aab": "node scripts/build-apk.mjs --aab",
     "modelo": "node scripts/optimize-model.mjs",
     "test": "node --test tests/*.test.mjs"
   },

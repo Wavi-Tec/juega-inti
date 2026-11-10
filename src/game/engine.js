@@ -12,6 +12,7 @@ import {
   INPUT_BUFFER,
   RUSH,
   SPAWN,
+  STREAK_MILESTONE,
   phaseIndexAt,
   bloomLevelFor,
 } from './config.js';
@@ -63,12 +64,14 @@ export class Game {
     this.blocks = 0;
     this.perfects = 0;
     this.misses = 0;
+    this.whiffs = 0;
     this.byType = CREATURE_TYPES.map(() => 0);
     this.groupBonuses = 0;
     this.spawned = 0;
     this.creatures = [];
     this.groups = new Map();
-    this.shield = { active: false, age: 0, cooldown: 0 };
+    // closeAt: momento en que se cierra (cada bloqueo lo alarga). blocked: bloqueos de esta apertura.
+    this.shield = { active: false, age: 0, closeAt: 0, blocked: 0, cooldown: 0, cooldownMax: SHIELD.cooldown };
     this.buffered = false;
     this.lastShieldEnd = -Infinity;
     this.rush = false;
@@ -96,7 +99,7 @@ export class Game {
   // 1 = listo para usarse, 0 = abierto o recién cerrado.
   get shieldCharge() {
     if (this.shield.active) return 0;
-    if (this.shield.cooldown > 0) return 1 - this.shield.cooldown / SHIELD.cooldown;
+    if (this.shield.cooldown > 0) return 1 - this.shield.cooldown / this.shield.cooldownMax;
     return 1;
   }
 
@@ -129,6 +132,8 @@ export class Game {
   openShield(events, buffered) {
     this.shield.active = true;
     this.shield.age = 0;
+    this.shield.closeAt = this.time + SHIELD.duration;
+    this.shield.blocked = 0;
     this.buffered = false;
     // Esperar a que el aro se cierre y tocar en el último momento es «¡Perfecto!».
     for (const c of this.creatures) {
@@ -201,11 +206,15 @@ export class Game {
     const sh = this.shield;
     if (sh.active) {
       sh.age += step;
-      if (sh.age >= SHIELD.duration) {
+      if (t >= sh.closeAt) {
+        // Si se cerró sin bloquear nada (tocó «al aire»), tarda más en recargar.
+        const whiff = sh.blocked === 0;
         sh.active = false;
-        sh.cooldown = SHIELD.cooldown;
+        sh.cooldownMax = whiff ? SHIELD.whiffCooldown : SHIELD.cooldown;
+        sh.cooldown = sh.cooldownMax;
         this.lastShieldEnd = t;
-        events.push({ type: 'shieldEnd' });
+        if (whiff) this.whiffs += 1;
+        events.push({ type: 'shieldEnd', whiff });
       }
     } else if (sh.cooldown > 0) {
       sh.cooldown = Math.max(0, sh.cooldown - step);
@@ -226,6 +235,9 @@ export class Game {
     c.stateT = 0;
     if (this.shield.active) {
       c.state = 'blocked';
+      // El escudo sigue abierto un poco más para el resto del grupo.
+      this.shield.blocked += 1;
+      this.shield.closeAt = Math.max(this.shield.closeAt, c.impactAt + SHIELD.extend);
       const prevBloom = bloomLevelFor(this.streak);
       this.streak += 1;
       this.bestStreak = Math.max(this.bestStreak, this.streak);
@@ -246,6 +258,7 @@ export class Game {
         streak: this.streak,
         bloom,
         bloomUp: bloom > prevBloom,
+        milestone: this.streak >= 2 * STREAK_MILESTONE && this.streak % STREAK_MILESTONE === 0,
       });
     } else {
       c.state = 'hit';
@@ -367,6 +380,7 @@ export class Game {
       blocks: this.blocks,
       perfects: this.perfects,
       misses: this.misses,
+      whiffs: this.whiffs,
       bestStreak: this.bestStreak,
       byType: this.byType.slice(),
       groups: this.groupBonuses,

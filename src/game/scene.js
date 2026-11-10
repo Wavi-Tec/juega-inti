@@ -102,6 +102,14 @@ const PERSON_3D_H = 190;
 const ECHI_3D_H = 160;
 const PERSON_TURN = 0.7;
 const ECHI_TURN = 0.3;
+// Echi algo más bajo que la persona; con la racha crece apenas (como mucho un 4,5 %).
+const ECHI_SIZE = 0.85;
+const ECHI_GROWTH = 0.015;
+
+// Resolución interna del lienzo: como mucho 2 píxeles por píxel CSS (más no se nota en un celular y
+// cuesta muchísimo) y unos 3 MP en pantallas grandes.
+const MAX_DPR = 2;
+const PIXEL_BUDGET = 3e6;
 
 const MAX_PARTICLES = 420;
 // Cantidades para una columna (W); en pantallas anchas se usan más, hasta estos máximos.
@@ -126,6 +134,7 @@ export class Scene {
     this.reducedMotion = reducedMotion;
     this.brand = brand;
     this.sprites = null;
+    this.hurtVignette = null;
     // Los textos de los carteles se vuelven a dibujar cuando termina de cargar la fuente.
     this.fontsReady = false;
     globalThis.document?.fonts?.ready.then(() => {
@@ -184,6 +193,8 @@ export class Scene {
     this.zoom = 0;
     this.rushT = -1;
     this.lastMissText = -9;
+    this.lastWhiffText = -9;
+    this.hurt = 0;
     this.combo = { value: 0, shown: 0, pop: 0 };
     this.echi = { expr: null, exprT: 0, tapAge: 9, blinkT: 2.2, blink: 0, look: 0, wave: 0, turn: ECHI_TURN };
     this.person = { expr: null, exprT: 0, blinkT: 3.4, blink: 0, turn: PERSON_TURN, wave: 0 };
@@ -194,10 +205,11 @@ export class Scene {
    * column: rectángulo de la columna de juego relativo al lienzo, en px CSS. Por defecto, el lienzo entero.
    */
   resize(cssW, cssH, dpr = 1, column = { left: 0, top: 0, width: cssW, height: cssH }) {
-    // En pantallas muy grandes se limita la resolución interna (~4,5 MP) y `quality` la baja
-    // más si el equipo no logra mantener la fluidez (ver EchiGame).
-    const maxDpr = Math.sqrt(4.5e6 / Math.max(1, cssW * cssH));
-    this.dpr = Math.max(0.5, Math.min(dpr || 1, 2.5, maxDpr) * this.quality);
+    // `quality` baja la resolución si el equipo no logra mantener la fluidez (ver EchiGame), hasta
+    // `minQuality`: 1 píxel de lienzo por píxel CSS.
+    const base = Math.min(dpr || 1, MAX_DPR, Math.sqrt(PIXEL_BUDGET / Math.max(1, cssW * cssH)));
+    this.minQuality = clamp(1 / base, 0.5, 0.75);
+    this.dpr = Math.max(0.5, base * this.quality);
     this.cssScale = column.width / W;
     this.originX = column.left;
     this.originY = column.top;
@@ -228,9 +240,8 @@ export class Scene {
     };
   }
 
-  // Echi crece un poco con la racha.
   echiScale() {
-    return 1 + 0.05 * this.bloomVis;
+    return ECHI_SIZE * (1 + ECHI_GROWTH * this.bloomVis);
   }
 
   echiHead() {
@@ -252,6 +263,7 @@ export class Scene {
   handle(events) {
     for (const e of events) {
       if (e.type === 'shield') this.onShield();
+      else if (e.type === 'shieldEnd' && e.whiff) this.onWhiff();
       else if (e.type === 'block') this.onBlock(e);
       else if (e.type === 'miss') this.onMiss(e);
       else if (e.type === 'group') this.onGroup(e);
@@ -259,6 +271,7 @@ export class Scene {
       else if (e.type === 'late') {
         const head = this.echiHead();
         this.addText('¡Un poco tarde!', head.x, head.y - 80, '#FFFFFF', 24, '#6A1B47');
+        this.lastMissText = this.t;
       } else if (e.type === 'spawn') {
         const p = this.creaturePos(e.creature);
         const gold = e.creature.type === 2;
@@ -296,6 +309,37 @@ export class Scene {
     this.addParticle({ type: 'ring', x: head.x, y: head.y, r0: 20, r1: 90, life: 0.35, max: 0.35, color: '255,214,230', width: 6 });
   }
 
+  // El escudo se cerró sin bloquear nada: se marchita y Echi tarda más en recargar.
+  onWhiff() {
+    const C = this.center;
+    const R = SHIELD.radius;
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * TAU + Math.random() * 0.3;
+      this.addParticle({
+        type: 'petal', x: C.x + Math.cos(a) * R, y: C.y + Math.sin(a) * R,
+        vx: Math.cos(a) * 30, vy: 20 + Math.random() * 40, rot: a + Math.PI / 2, vr: (Math.random() - 0.5) * 4,
+        size: 13, color: i % 2 ? '#D9B3C4' : '#BE8FA5', life: 0.9, max: 0.9, g: 380,
+      });
+    }
+    // Un consejo por error: si acaba de fallar o tocó tarde, ya se le dijo qué pasó.
+    if (this.t - this.lastWhiffText > 1.2 && this.t - this.lastMissText > 1.2) {
+      this.lastWhiffText = this.t;
+      const head = this.echiHead();
+      this.addText('¡Espera el brillo!', head.x, head.y - 80, '#FFFFFF', 24, '#6A1B47', 1);
+    }
+    this.setEchi('worried', 0.5);
+  }
+
+  // Superó su récord en plena partida.
+  onRecord() {
+    this.addText('¡Nuevo récord!', W / 2, this.center.y - SHIELD.radius - 200, COLORS.gold, 40, COLORS.pinkDark, 1.8);
+    this.flash = { color: '255,226,120', a: 0.3 };
+    this.zoom = Math.max(this.zoom, 0.9);
+    this.petalShower(36);
+    this.setEchi('cheer', 0.9);
+    this.setPerson('happy', 0.9);
+  }
+
   onBlock(e) {
     const c = e.creature;
     const p = this.creaturePos(c);
@@ -322,6 +366,12 @@ export class Scene {
       });
     }
     this.addParticle({ type: 'ring', x: p.x, y: p.y, r0: 14, r1: golden ? 110 : 70, life: 0.4, max: 0.4, color: shiny ? '255,210,63' : '255,255,255', width: 7 });
+    if (shiny) {
+      this.addParticle({
+        type: 'rays', x: p.x, y: p.y, r0: 22, r1: golden ? 135 : 105, n: golden ? 16 : 12,
+        rot: Math.random() * TAU, color: '255,210,63', width: 6, life: 0.34, max: 0.34,
+      });
+    }
 
     const label = e.perfect ? `¡Perfecto! +${e.points}` : `+${e.points}`;
     this.addText(label, p.x, p.y - 34, shiny ? COLORS.gold : '#FFFFFF', golden ? 34 : 30);
@@ -336,6 +386,12 @@ export class Scene {
       this.flash = { color: '255,170,205', a: 0.2 };
       this.zoom = Math.max(this.zoom, 0.6);
       this.petalShower(28);
+    }
+    if (e.milestone) {
+      this.addText(`¡Racha de ${e.streak}!`, W / 2, this.center.y - SHIELD.radius - 150, COLORS.gold, 38, COLORS.pinkDark, 1.6);
+      this.flash = { color: '255,226,120', a: 0.25 };
+      this.zoom = Math.max(this.zoom, 0.8);
+      this.petalShower(24);
     }
     this.shake = Math.max(this.shake, 4);
     this.setEchi('happy', 0.6);
@@ -355,6 +411,7 @@ export class Scene {
     this.setEchi('worried', 0.8);
     this.shake = Math.max(this.shake, 7);
     this.flash = { color: '120,60,160', a: 0.2 };
+    this.hurt = 1;
     const p = this.creaturePos(e.creature);
     this.puff(p.x, p.y, 3, '230,210,255');
   }
@@ -637,7 +694,7 @@ export class Scene {
     // Partículas
     for (const p of this.particles) {
       p.life -= dt;
-      if (p.type === 'ring') continue; // los aros crecen en su lugar, no se mueven
+      if (p.type === 'ring' || p.type === 'rays') continue; // crecen en su lugar, no se mueven
       p.vy += (p.g || 0) * dt;
       p.vx *= 1 - dt * 1.2;
       p.x += p.vx * dt;
@@ -653,6 +710,7 @@ export class Scene {
 
     this.shake *= Math.exp(-dt * 12);
     this.flash.a = Math.max(0, this.flash.a - dt * 1.6);
+    this.hurt = Math.max(0, this.hurt - dt * 2.2);
   }
 
   creaturePos(c) {
@@ -756,6 +814,23 @@ export class Scene {
       v.addColorStop(0, 'rgba(20, 30, 50, 0)');
       v.addColorStop(1, 'rgba(20, 30, 50, 0.28)');
       this.vignette = v;
+    }
+    if (this.hurt > 0.01) {
+      // Borde morado que late cuando un virus llega a la persona: una elipse ajustada a lo visible,
+      // para que se vea también a los costados en un celular vertical.
+      if (!this.hurtVignette) {
+        const h = ctx.createRadialGradient(0, 0, 0.6, 0, 0, 1.12);
+        h.addColorStop(0, 'rgba(130, 30, 120, 0)');
+        h.addColorStop(1, 'rgba(130, 30, 120, 0.45)');
+        this.hurtVignette = h;
+      }
+      ctx.save();
+      ctx.translate(vx + vw / 2, this.H / 2);
+      ctx.scale(vw / 2, this.H / 2);
+      ctx.globalAlpha = this.hurt;
+      ctx.fillStyle = this.hurtVignette;
+      ctx.fillRect(-1, -1, 2, 2);
+      ctx.restore();
     }
     ctx.globalAlpha = 0.5 + this.weights[2] * 0.6;
     ctx.fillStyle = this.vignette;
@@ -950,10 +1025,12 @@ export class Scene {
   }
 
   // `key`: color de la paleta. La cima recibe más luz que la base y tiene un borde iluminado.
+  // Se rellena solo hasta donde empieza el suelo, que la tapa por debajo.
   drawHills(ctx, base, amp, f1, f2, off, key) {
     const rgb = this.Prgb[key];
     const x0 = Math.floor((this.left - 30) / 15) * 15;
     const x1 = this.right + 30;
+    const bottom = this.groundY;
     const ridge = () => {
       for (let x = x0; x <= x1 + 15; x += 15) {
         const wx = x + off;
@@ -965,9 +1042,9 @@ export class Scene {
     g.addColorStop(1, rgbStr(rgb, -0.1));
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.moveTo(x0, this.H);
+    ctx.moveTo(x0, bottom);
     ridge();
-    ctx.lineTo(x1 + 15, this.H);
+    ctx.lineTo(x1 + 15, bottom);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = rgbStr(rgb, 0.32);
@@ -1511,12 +1588,12 @@ export class Scene {
       ctx.translate(head.x, head.y);
       ctx.rotate(t * 0.4);
       ctx.globalAlpha = Math.min(1, this.bloomVis);
-      const len = 30 + Math.min(this.bloomVis, 3) * 6;
+      const len = (30 + Math.min(this.bloomVis, 3) * 6) * s;
       for (let i = 0; i < 16; i++) {
         ctx.save();
         ctx.rotate((i / 16) * TAU);
         ctx.translate(0, -62 * s);
-        drawPetal(ctx, len, 16, COLORS.pinkLight, null, null);
+        drawPetal(ctx, len, 16 * s, COLORS.pinkLight, null, null);
         ctx.restore();
       }
       ctx.restore();
@@ -1677,6 +1754,22 @@ export class Scene {
         ctx.lineWidth = p.width * a + 1;
         ctx.beginPath();
         ctx.arc(p.x, p.y, lerp(p.r1, p.r0, a), 0, TAU);
+        ctx.stroke();
+      } else if (p.type === 'rays') {
+        // Destello en estrella: rayos que salen disparados y se acortan.
+        const inner = lerp(p.r0, p.r1, easeOutCubic(1 - a));
+        const outer = inner + (p.r1 - p.r0) * 0.45 * a;
+        ctx.strokeStyle = `rgba(${p.color},${Math.min(1, a * 1.5)})`;
+        ctx.lineWidth = p.width * a + 1;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (let i = 0; i < p.n; i++) {
+          const ang = p.rot + (i / p.n) * TAU;
+          const ca = Math.cos(ang);
+          const sa = Math.sin(ang);
+          ctx.moveTo(p.x + ca * inner, p.y + sa * inner);
+          ctx.lineTo(p.x + ca * outer, p.y + sa * outer);
+        }
         ctx.stroke();
       } else if (p.type === 'puff') {
         ctx.fillStyle = `rgba(${p.color},${a * 0.8})`;

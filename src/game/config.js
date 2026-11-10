@@ -58,14 +58,17 @@ export const CREATURE_TYPES = [
 export const INTRO_TIME = 10;
 
 export const SHIELD = {
-  duration: 1.0, // segundos que el escudo permanece abierto
-  cooldown: 0.35, // recarga tras cerrarse (evita mantenerlo abierto tocando sin parar)
+  duration: 0.6, // segundos que el escudo permanece abierto si no bloquea nada
+  extend: 0.3, // cada bloqueo lo mantiene abierto al menos esto más, para el resto del grupo
+  cooldown: 0.35, // recarga tras cerrarse
+  whiffCooldown: 0.9, // recarga si se cerró sin bloquear nada: tocar sin parar no sirve
   radius: 155, // radio visual del escudo
   hitRadius: 168, // distancia al centro a la que una criatura "llega" al escudo
 };
 
 // Una criatura está en la zona ideal cuando le faltan menos de ZONE_TIME segundos para llegar.
-// ZONE_TIME + mayor separación de un grupo < duración del escudo: tocar al brillar siempre bloquea.
+// ZONE_TIME < SHIELD.duration y la mayor separación dentro de un grupo (`gap`) < SHIELD.extend:
+// tocar al brillar siempre bloquea el grupo entero. Tocar antes de que brille es arriesgado.
 export const ZONE_TIME = 0.5;
 // El aro de aviso aparece antes, para anticipar el momento.
 export const RING_TIME = 1.3;
@@ -78,6 +81,7 @@ export const INPUT_BUFFER = 0.2;
 export const RUSH = { start: 50 };
 
 export const STREAK_BLOOM = 3; // bloqueos seguidos para que florezca el escudo
+export const STREAK_MILESTONE = 10; // desde 20 seguidos, cada 10 se celebra (sin puntos extra)
 
 export const SPAWN = {
   firstImpact: 5.0, // la primera criatura aparece ~1,4 s después de empezar

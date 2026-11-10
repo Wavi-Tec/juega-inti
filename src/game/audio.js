@@ -323,6 +323,23 @@ class SoundEngine {
     this.tone(240, this.ctx.currentTime, 0.07, 'square', 0.03, this.sfx);
   }
 
+  // El escudo se cerró sin bloquear nada: se desinfla.
+  whiff() {
+    if (!this.ready()) return;
+    const t = this.ctx.currentTime;
+    this.noiseHit(t, 0.3, 1800, 0.12, this.sfx, 'bandpass', 350);
+    this.tone(520, t, 0.3, 'sine', 0.08, this.sfx, 0.01, 240);
+  }
+
+  // Nuevo récord en plena partida.
+  record() {
+    if (!this.ready()) return;
+    const t = this.ctx.currentTime;
+    [72, 76, 79, 84, 88, 91].forEach((n, i) => this.tone(mtof(n), t + i * 0.06, 0.3, 'square', 0.045, this.sfx));
+    this.tone(mtof(96), t + 0.38, 0.8, 'triangle', 0.15, this.sfx);
+    this.noiseHit(t + 0.38, 0.5, 3000, 0.1, this.sfx, 'bandpass', 9000);
+  }
+
   phase(index) {
     if (!this.ready()) return;
     const t = this.ctx.currentTime;

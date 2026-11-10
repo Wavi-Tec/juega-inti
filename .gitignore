@@ -20,8 +20,14 @@
 # production
 /build
 
-# instalador de Android generado con `npm run apk`
+# instaladores de Android generados con `npm run apk` y `npm run aab`
 *.apk
+*.aab
+
+# claves de firma de Android: nunca se suben al repositorio
+*.jks
+*.keystore
+keystore.properties
 
 # misc
 .DS_Store

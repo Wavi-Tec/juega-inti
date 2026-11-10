@@ -46,6 +46,15 @@ export function SoundOffIcon() {
   );
 }
 
+export function LinkedInIcon() {
+  return (
+    <svg {...base} stroke="none">
+      <rect x="2" y="2" width="20" height="20" rx="4.5" fill="currentColor" />
+      <path d="M7.5 10.5V17M7.5 7.2v.01M11.5 17v-6.5M11.5 13.5a2.8 2.8 0 0 1 5.6 0V17" stroke="#fff" />
+    </svg>
+  );
+}
+
 export function FlowerIcon() {
   const petals = Array.from({ length: 10 }, (_, i) => i * 36);
   return (

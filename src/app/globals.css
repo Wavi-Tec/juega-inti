@@ -177,11 +177,12 @@ button {
   pointer-events: auto;
 }
 
+/* Sin backdrop-filter en lo que va encima del juego: el lienzo cambia en cada cuadro y el
+   desenfoque se recalcularía siempre, lo que vuelve lento el juego en celulares Android. Los
+   fondos ya son casi opacos. Solo la pausa (juego quieto) usa desenfoque. */
 .hud-score,
 .hud-time {
   background: var(--glass);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
   border-radius: 4.5cqw;
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-md), var(--glass-inner);
@@ -343,8 +344,6 @@ button {
   border: 1px solid var(--glass-border);
   border-radius: 50%;
   background: var(--glass);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
   color: var(--pink-dark);
   font-size: 5.6cqw;
   box-shadow: var(--shadow-md), var(--glass-inner);
@@ -383,8 +382,6 @@ button {
   padding: 2.6cqw 3.8cqw;
   border-radius: 5cqw;
   background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 2cqw 6cqw rgba(80, 20, 60, 0.18), inset 0 1px 1px #fff;
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-left: 1.6cqw solid var(--pink);
@@ -462,7 +459,6 @@ button {
   padding: 1.8cqw 4.8cqw;
   border-radius: 99px;
   background: rgba(153, 15, 70, 0.92);
-  backdrop-filter: blur(10px);
   color: #fff;
   font: 800 4.2cqw var(--font-display);
   box-shadow: 0 1.5cqw 4cqw rgba(80, 10, 40, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.4);
@@ -586,6 +582,11 @@ button {
   animation: now-badge-bounce 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) infinite alternate;
 }
 
+/* Tocó «al aire»: el botón se apaga mientras dura la recarga larga. */
+.shield-btn.is-tired {
+  filter: saturate(0.3) brightness(0.92);
+}
+
 .shield-btn:disabled {
   cursor: default;
   filter: saturate(0.65);
@@ -620,8 +621,6 @@ button {
 .screen-result {
   justify-content: safe center;
   background: rgba(255, 240, 246, 0.35);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
 }
 
 .card {
@@ -632,9 +631,7 @@ button {
   width: 100%;
   padding: 5.2cqw;
   border-radius: 6.5cqw;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(20px) saturate(190%);
-  -webkit-backdrop-filter: blur(20px) saturate(190%);
+  background: rgba(255, 255, 255, 0.9);
   border: 1.5px solid var(--glass-border);
   box-shadow:
     0 2.5cqw 7cqw rgba(80, 15, 60, 0.2),
@@ -667,10 +664,42 @@ button {
 
 .start-footer .presenter-note {
   background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.85);
   box-shadow: var(--shadow-sm);
+}
+
+/* Crédito de desarrollo: discreto, debajo de la nota para quien presenta. */
+.dev-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.4cqw;
+  min-height: 10cqw;
+  padding: 1.2cqw 3.6cqw;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(58, 31, 43, 0.08);
+  color: var(--muted);
+  font: 700 3cqw var(--font-body);
+  text-decoration: none;
+  box-shadow: 0 0.8cqw 2cqw rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.dev-credit strong {
+  color: var(--ink);
+}
+
+.dev-credit svg {
+  font-size: 4.4cqw;
+  color: #0a66c2;
+}
+
+.dev-credit:hover {
+  background: #fff;
+}
+
+.dev-credit:active {
+  transform: scale(0.97);
 }
 
 .brand-chip {
@@ -1017,9 +1046,7 @@ button {
   padding: 1.6cqw 3.8cqw;
   border: 1px solid rgba(58, 31, 43, 0.08);
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.82);
   color: var(--ink);
   font: 800 3.6cqw var(--font-body);
   box-shadow: 0 0.8cqw 2cqw rgba(0, 0, 0, 0.04);

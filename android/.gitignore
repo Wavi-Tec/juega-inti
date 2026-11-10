@@ -89,6 +89,11 @@ lint/tmp/
 # Android Profiling
 *.hprof
 
+# Firma de producción (clave de INTI y sus contraseñas): nunca se suben al repositorio
+keystore.properties
+*.jks
+*.keystore
+
 # Cordova plugins for Capacitor
 capacitor-cordova-android-plugins
 
