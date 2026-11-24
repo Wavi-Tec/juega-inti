@@ -27,7 +27,8 @@ export const MENSAJES_CLIMA = [
 export const FRASE_PRESENTADOR = 'Mira cómo Echi acompaña al personaje durante los cambios de clima';
 
 // Aviso en la pantalla de resultado.
-export const AVISO_FANTASIA_CORTO = 'Juego de fantasía: no representa el efecto del producto.';
+export const AVISO_FANTASIA_CORTO =
+  '¡Descubre cómo el producto ayuda a protegerte de los virus y fortalecer tus defensas!';
 
 // Crédito de desarrollo en la portada (abre el perfil en el navegador).
 export const DESARROLLADOR = {

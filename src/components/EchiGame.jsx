@@ -566,8 +566,9 @@ export default function EchiGame() {
               <span className="shield-btn-icon" aria-hidden="true">
                 <PetalShieldIcon />
               </span>
-              <span className="shield-btn-label">Activar escudo</span>
+        <span className="shield-btn-label">¡Toma Echinacea Médica!</span>
               <span className="shield-btn-now" aria-hidden="true">
+                
                 ¡Ahora!
               </span>
             </button>
