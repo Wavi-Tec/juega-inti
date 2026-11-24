@@ -12,10 +12,12 @@ const nextConfig = exportStatic
       // el juego es una sola página que corre en el navegador y no las necesita.
       cacheComponents: false,
       partialPrefetching: false,
+      experimental: { agentUpgrade: 'security' },
     }
   : {
       cacheComponents: true,
       partialPrefetching: true,
+      experimental: { agentUpgrade: 'security' },
     };
 
 export default nextConfig;
